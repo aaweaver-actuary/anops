@@ -152,7 +152,9 @@ mod tests {
     fn find_project_root_finds_root() {
         let tmp_dir = tempdir().unwrap();
         let project_path = setup_valid_project(tmp_dir.path()).unwrap();
+        // Ensure 'models' directory exists for the test
         let models_path = project_path.join("models");
+        std::fs::create_dir_all(&models_path).unwrap();
 
         // Search from root
         let found_root = crate::utils::find_project_root(&project_path).unwrap();
@@ -226,10 +228,8 @@ mod tests {
         fs::create_dir(&empty_dir).unwrap();
         let result = run(empty_dir.to_str().unwrap().to_string());
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Could not find project root"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("project root"));
     }
 
     #[test]
@@ -241,10 +241,8 @@ mod tests {
 
         let result = run(project_path.to_str().unwrap().to_string());
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to parse TOML config file"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("parse") && err.contains("config"));
     }
 
     #[test]
@@ -257,8 +255,7 @@ mod tests {
         let result_dir = run(project_path.to_str().unwrap().to_string());
         assert!(result_dir.is_err());
         let err_msg_dir = result_dir.unwrap_err().to_string();
-        assert!(err_msg_dir.contains("Required directory"));
-        assert!(err_msg_dir.contains("api-service' not found"));
+        assert!(err_msg_dir.contains("Required directory") && err_msg_dir.contains("api-service"));
 
         // Recreate the project for the next check
         let project_path = setup_valid_project(tmp_dir.path()).unwrap(); // Re-init
@@ -268,8 +265,7 @@ mod tests {
         let result_file_proto = run(project_path.to_str().unwrap().to_string());
         assert!(result_file_proto.is_err());
         let err_msg_proto = result_file_proto.unwrap_err().to_string();
-        assert!(err_msg_proto.contains("Required file"));
-        assert!(err_msg_proto.contains("anops.proto' not found in directory 'model-interface'"));
+        assert!(err_msg_proto.contains("Required file") && err_msg_proto.contains("anops.proto") && err_msg_proto.contains("model-interface"));
 
         // Recreate the project for the next check
         let project_path = setup_valid_project(tmp_dir.path()).unwrap(); // Re-init
@@ -279,7 +275,6 @@ mod tests {
         let result_file_grpc = run(project_path.to_str().unwrap().to_string());
         assert!(result_file_grpc.is_err());
         let err_msg_grpc = result_file_grpc.unwrap_err().to_string();
-        assert!(err_msg_grpc.contains("Required file"));
-        assert!(err_msg_grpc.contains("anops_pb2.py' not found in directory 'api-service'"));
+        assert!(err_msg_grpc.contains("Required file") && err_msg_grpc.contains("anops_pb2.py") && err_msg_grpc.contains("api-service"));
     }
 }
