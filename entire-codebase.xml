@@ -62,26 +62,36 @@ ao-cli/
   .gitignore
   Cargo.toml
 api-service/
+  tests/
+    test_main.py
   anops_pb2_grpc.py
   anops_pb2.py
   anops_pb2.pyi
   Dockerfile
   main.py
   README.md
+  requirements-dev.txt
   requirements.txt
 model-interface/
   anops.proto
   README.md
 model-service/
+  tests/
+    test_server.py
   anops_pb2_grpc.py
   anops_pb2.py
   anops_pb2.pyi
   Dockerfile
   README.md
+  requirements-dev.txt
   requirements.txt
   server.py
+tests/
+  test_e2e.py
+.pre-commit-config.yaml
 .repomixignore
 ao.toml
+CONTRIBUTING.md
 docker-compose.yml
 README.md
 repomix.config.json
@@ -96,91 +106,6 @@ pub enum Language {
 
 <file path="ao-cli/src/opts/mod.rs">
 pub mod language;
-</file>
-
-<file path="ao-cli/src/build.rs">
-use std::path::Path;
-⋮----
-use crate::config;
-⋮----
-use crate::check; // Import the check module to run pre-build checks
-⋮----
-/// Handler for `ao build`.
-/// Finds the project root, loads config, runs checks, and builds Docker images.
-///
-/// # Arguments
-⋮----
-/// * `path_str` - Path within the project directory to start searching from.
-⋮----
-/// # Errors
-⋮----
-/// Returns an error if the project root is not found, config loading fails,
-/// checks fail, or any Docker build command fails.
-pub fn run(path_str: String) -> Result<()> {
-⋮----
-println!("Starting build from '{}'", start_path.display());
-⋮----
-// Find project root
-let project_path = find_project_root(start_path)
-.with_context(|| format!("Failed to find project root starting from '{}'", start_path.display()))?;
-println!("Found project root at '{}'", project_path.display());
-⋮----
-// Load configuration
-⋮----
-.context("Failed to load project configuration")?;
-⋮----
-println!("Building project: {}", project_name);
-⋮----
-// --- Pre-build Checks --- //
-println!("--- Running Pre-Build Checks ---");
-// Use the existing check::run function
-check::run(path_str.clone()) // Pass the original path string
-.context("Pre-build checks failed")?;
-println!("--- Pre-Build Checks Passed ---");
-⋮----
-// --- Build Docker Images --- //
-println!("--- Building Docker Images ---");
-⋮----
-// Define image names (using project name from config)
-// TODO: Allow overriding tags/names via config or CLI args later
-let api_image_name = format!("{}-api-service:latest", project_name);
-let model_image_name = format!("{}-model-service:latest", project_name);
-⋮----
-// Build api-service
-let api_service_path = project_path.join("api-service");
-if api_service_path.exists() && api_service_path.is_dir() {
-println!("Building {}...", api_image_name);
-let build_cmd = format!(
-⋮----
-run_tool(&build_cmd, &api_service_path)
-.with_context(|| format!("Failed to build api-service image: {}", api_image_name))?;
-println!("Successfully built {}", api_image_name);
-⋮----
-println!("Skipping api-service build: directory not found at {:?}", api_service_path);
-⋮----
-// Build model-service
-let model_service_path = project_path.join("model-service");
-if model_service_path.exists() && model_service_path.is_dir() {
-println!("Building {}...", model_image_name);
-// Note: This assumes the Docker context is the model-service directory itself.
-// If generated gRPC code needs to be included from model-interface,
-// the Dockerfile or build process might need adjustment (e.g., copying files before build).
-⋮----
-run_tool(&build_cmd, &model_service_path)
-.with_context(|| format!("Failed to build model-service image: {}", model_image_name))?;
-println!("Successfully built {}", model_image_name);
-⋮----
-println!("Skipping model-service build: directory not found at {:?}", model_service_path);
-⋮----
-println!("--- Docker Images Built Successfully ---");
-⋮----
-Ok(())
-⋮----
-// TODO: Add tests for build::run
-// - Test success case (mocks docker build or requires docker)
-// - Test failure if check::run fails
-// - Test failure if docker build fails
-// - Test finding root from subdir
 </file>
 
 <file path="ao-cli/src/check.rs">
@@ -525,169 +450,6 @@ let config_content = format!("[project]\nname = \"{}\"\n\n[check]\nlinters = \"n
 assert!(result.unwrap_err().to_string().contains("invalid type: string \"not-an-array\", expected a sequence"));
 </file>
 
-<file path="ao-cli/src/init.rs">
-use std::fs;
-use std::path::Path;
-⋮----
-// Basic placeholder content for generated files
-⋮----
-/// Handler for `ao init`.
-/// Creates the basic project directory structure and configuration file.
-///
-/// # Arguments
-⋮----
-/// * `name` - The name of the project directory to initialize.
-⋮----
-/// # Errors
-⋮----
-/// Returns an error if initialization fails (e.g., directory creation, file creation).
-pub fn run(name: String) -> Result<()> {
-⋮----
-println!("Initializing project '{}' at {:?}", name, project_path);
-⋮----
-// Create base directory
-⋮----
-.with_context(|| format!("Failed to create project directory: {}", project_path.display()))?;
-println!("Created directory: {:?}", project_path);
-⋮----
-// Create standard subdirectories
-⋮----
-for subdir in subdirs.iter() {
-let dir_path = project_path.join(subdir);
-⋮----
-.with_context(|| format!("Failed to create subdirectory: {}", dir_path.display()))?;
-println!("Created directory: {:?}", dir_path);
-⋮----
-// Create ao.toml configuration file
-let config_path = project_path.join("ao.toml");
-let config_content = DEFAULT_AO_TOML_CONTENT.replace("{}", &name); // Basic placeholder, replace name
-⋮----
-.with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
-println!("Created config file: {:?}", config_path);
-⋮----
-// Create .gitignore
-let gitignore_path = project_path.join(".gitignore");
-⋮----
-.with_context(|| format!("Failed to write .gitignore file: {}", gitignore_path.display()))?;
-println!("Created file: {:?}", gitignore_path);
-⋮----
-// Create Dockerfiles
-let api_dockerfile_path = project_path.join("api-service/Dockerfile");
-⋮----
-.with_context(|| format!("Failed to write api-service Dockerfile: {}", api_dockerfile_path.display()))?;
-println!("Created file: {:?}", api_dockerfile_path);
-⋮----
-let model_dockerfile_path = project_path.join("model-service/Dockerfile");
-⋮----
-.with_context(|| format!("Failed to write model-service Dockerfile: {}", model_dockerfile_path.display()))?;
-println!("Created file: {:?}", model_dockerfile_path);
-⋮----
-// Create docker-compose.yml
-let compose_path = project_path.join("docker-compose.yml");
-⋮----
-.with_context(|| format!("Failed to write docker-compose.yml: {}", compose_path.display()))?;
-println!("Created file: {:?}", compose_path);
-⋮----
-// Create model-interface proto file
-let proto_path = project_path.join("model-interface/anops.proto");
-⋮----
-.with_context(|| format!("Failed to write anops.proto: {}", proto_path.display()))?;
-println!("Created file: {:?}", proto_path);
-⋮----
-// Create READMEs
-let api_readme_path = project_path.join("api-service/README.md");
-⋮----
-.with_context(|| format!("Failed to write api-service README: {}", api_readme_path.display()))?;
-println!("Created file: {:?}", api_readme_path);
-⋮----
-let model_readme_path = project_path.join("model-service/README.md");
-⋮----
-.with_context(|| format!("Failed to write model-service README: {}", model_readme_path.display()))?;
-println!("Created file: {:?}", model_readme_path);
-⋮----
-let interface_readme_path = project_path.join("model-interface/README.md");
-⋮----
-.with_context(|| format!("Failed to write model-interface README: {}", interface_readme_path.display()))?;
-println!("Created file: {:?}", interface_readme_path);
-⋮----
-// Create placeholder files in services (optional, but good practice)
-// e.g., api-service/main.py, model-service/server.py
-// fs::write(project_path.join("api-service/main.py"), "# FastAPI app placeholder")?;
-// fs::write(project_path.join("model-service/server.py"), "# gRPC server placeholder")?;
-⋮----
-println!("Project '{}' initialized successfully.", name);
-println!("Next steps:");
-println!("  - cd {}", name);
-println!("  - Review READMEs in api-service, model-service, model-interface.");
-println!("  - Implement your model in model-service.");
-println!("  - Implement the API endpoints in api-service.");
-println!("  - Generate gRPC code (see model-interface/README.md).");
-println!("  - Configure dependencies (e.g., requirements.txt).");
-println!("  - Run 'docker-compose up --build' to build and start services.");
-⋮----
-Ok(())
-⋮----
-mod tests {
-⋮----
-use tempfile::tempdir;
-⋮----
-fn run_succeeds_and_creates_structure() {
-let tmp_dir = tempdir().unwrap();
-⋮----
-// Run the init command relative to the temp dir
-let result = run(tmp_dir.path().join(project_name).to_str().unwrap().to_string());
-assert!(result.is_ok());
-⋮----
-let project_path = tmp_dir.path().join(project_name);
-⋮----
-// Check if base directory exists
-assert!(project_path.exists());
-assert!(project_path.is_dir());
-⋮----
-// Check if standard subdirectories exist
-⋮----
-assert!(dir_path.exists(), "Directory missing: {}", subdir);
-assert!(dir_path.is_dir(), "Path is not a directory: {}", subdir);
-⋮----
-// Check if core files exist
-⋮----
-for file in core_files.iter() {
-let file_path = project_path.join(file);
-assert!(file_path.exists(), "File missing: {}", file);
-assert!(file_path.is_file(), "Path is not a file: {}", file);
-⋮----
-// Check if config file has basic content
-⋮----
-let content = fs::read_to_string(config_path).unwrap();
-assert!(content.contains(&format!("[project]
-⋮----
-// Check .gitignore content (basic check)
-⋮----
-let gitignore_content = fs::read_to_string(gitignore_path).unwrap();
-assert!(gitignore_content.contains("__pycache__/"));
-assert!(gitignore_content.contains("*.pyc"));
-⋮----
-// Clean up is handled by tempdir dropping
-⋮----
-fn run_fails_if_cannot_create_dir() {
-// This test is tricky because permissions are hard to simulate reliably
-// across platforms in a unit test without running as root or modifying
-// system state. We rely on the OS preventing creation in restricted areas.
-// Trying to create directly in `/` (on Unix-like systems) might fail
-// without root privileges.
-if cfg!(unix) {
-⋮----
-// Attempt to run the init command in a restricted path
-let result = run(project_name.to_string());
-// We expect this to fail, likely with a permission error context.
-assert!(result.is_err());
-assert!(result.unwrap_err().to_string().contains("Failed to create project directory"));
-⋮----
-// Skip this specific scenario on non-Unix platforms where
-// root directory permissions might behave differently.
-println!("Skipping root directory creation test on non-Unix platform.");
-</file>
-
 <file path="ao-cli/src/lib.rs">
 pub mod init;
 pub mod check;
@@ -867,73 +629,6 @@ assert!(project_path.join("build_output_subdir").exists());
 assert!(project_path.join("build_output_subdir").is_dir());
 </file>
 
-<file path="ao-cli/src/utils.rs">
-/// Searches upwards from the starting path for a file named `ao.toml`.
-/// Returns the path to the directory containing `ao.toml` if found.
-pub fn find_project_root(start_path: &Path) -> Result<PathBuf> {
-println!("find_project_root: Starting search from '{}'", start_path.display()); // Added log
-// Canonicalize the starting path to resolve symlinks and relative components
-⋮----
-.canonicalize()
-.with_context(|| format!("Failed to canonicalize path: {}", start_path.display()))?;
-println!("find_project_root: Canonical path is '{}'", current_path.display()); // Added log
-⋮----
-let config_path = current_path.join("ao.toml");
-println!("find_project_root: Checking for config at '{}'", config_path.display()); // Added log
-if config_path.exists() && config_path.is_file() {
-println!("find_project_root: Found config at '{}'", config_path.display()); // Added log
-return Ok(current_path);
-⋮----
-// Move up to the parent directory
-if let Some(parent) = current_path.parent() {
-// Check if we are already at the root to prevent infinite loop
-⋮----
-println!("find_project_root: Reached filesystem root, config not found."); // Added log
-⋮----
-println!("find_project_root: Moving up to parent '{}'", parent.display()); // Added log
-current_path = parent.to_path_buf();
-⋮----
-// Should not happen if parent == current_path check works, but as a safeguard
-println!("find_project_root: No parent found, config not found."); // Added log
-⋮----
-// If loop finishes without returning, the file was not found
-bail!(
-⋮----
-/// Executes an external tool/command within the project directory.
-///
-/// # Arguments
-⋮----
-/// * `command_str` - The command string to execute (e.g., "ruff check .").
-/// * `project_root` - The path to the project root directory, used as the working directory.
-⋮----
-/// # Errors
-⋮----
-/// Returns an error if the command cannot be executed or if it exits with a non-zero status.
-pub fn run_tool(command_str: &str, project_root: &Path) -> Result<()> {
-println!(
-⋮----
-if command_str.is_empty() {
-bail!("Cannot run an empty command string.");
-⋮----
-// Basic command parsing (split by space, handle potential quotes later if needed)
-let parts: Vec<&str> = command_str.split_whitespace().collect();
-if parts.is_empty() {
-⋮----
-command.args(args);
-command.current_dir(project_root);
-command.stdout(Stdio::inherit()); // Stream stdout directly
-command.stderr(Stdio::inherit()); // Stream stderr directly
-⋮----
-.status()
-.with_context(|| format!("Failed to execute command: '{}'", command_str))?;
-⋮----
-if status.success() {
-println!("Tool '{}' finished successfully.", command_str);
-Ok(())
-⋮----
-bail!("Tool '{}' failed with status: {}", command_str, status);
-</file>
-
 <file path="ao-cli/.gitignore">
 /target
 entire-codebase.xml
@@ -941,20 +636,55 @@ repomix.config.json
 .repomixignore
 </file>
 
-<file path="ao-cli/Cargo.toml">
-[package]
-name = "ao"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-clap = { version = "4.2", features = ["derive"] }
-anyhow = "1.0"
-toml = "0.8" # Added for TOML parsing
-serde = { version = "1.0", features = ["derive"] } # Added for deserialization
-
-[dev-dependencies]
-tempfile = "3.10"
+<file path="api-service/tests/test_main.py">
+client = TestClient(main.app)
+⋮----
+def test_health_check()
+⋮----
+response = client.get("/health")
+⋮----
+@pytest.mark.asyncio
+@patch("main.anops_pb2_grpc.AnOpsStub")
+async def test_predict_success(mock_stub)
+⋮----
+# Mock the gRPC stub's Predict method
+mock_predict = AsyncMock()
+⋮----
+response = await client.post("/predict", json={"input_data": "test input"})
+⋮----
+@pytest.mark.asyncio
+@patch("main.anops_pb2_grpc.AnOpsStub")
+async def test_predict_invalid_argument(mock_stub)
+⋮----
+# Simulate gRPC INVALID_ARGUMENT error
+⋮----
+error = main.grpc.aio.AioRpcError(
+⋮----
+response = await client.post("/predict", json={"input_data": ""})
+⋮----
+@pytest.mark.asyncio
+@patch("main.anops_pb2_grpc.AnOpsStub")
+async def test_predict_service_unavailable(mock_stub)
+⋮----
+# Simulate gRPC UNAVAILABLE error
+⋮----
+error = main.grpc.aio.AioRpcError(main.grpc.StatusCode.UNAVAILABLE, "Service down")
+⋮----
+response = await client.post("/predict", json={"input_data": "test"})
+⋮----
+@pytest.mark.asyncio
+@patch("main.anops_pb2_grpc.AnOpsStub")
+async def test_predict_internal_error(mock_stub)
+⋮----
+# Simulate generic gRPC error
+⋮----
+error = main.grpc.aio.AioRpcError(main.grpc.StatusCode.INTERNAL, "Internal error")
+⋮----
+@pytest.mark.asyncio
+@patch("main.anops_pb2_grpc.AnOpsStub")
+async def test_predict_unexpected_exception(mock_stub)
+⋮----
+# Simulate unexpected exception
 </file>
 
 <file path="api-service/anops_pb2_grpc.py">
@@ -1037,75 +767,6 @@ class PredictResponse(_message.Message):
     def __init__(self, output_data: _Optional[str] = ...) -> None: ...
 </file>
 
-<file path="api-service/Dockerfile">
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application code
-# This includes main.py and potentially the generated gRPC code
-# if it's placed/copied here during the build process.
-COPY . .
-
-# Expose the port the app runs on
-EXPOSE 8000
-
-# Command to run the application using Uvicorn
-# It will look for an object named 'app' in the file 'main.py'
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-</file>
-
-<file path="api-service/main.py">
-# Import the generated gRPC classes
-# Assumes the generated files (_pb2.py, _pb2_grpc.py) are accessible.
-# This might require adjusting PYTHONPATH or copying files during build.
-# For simplicity, we'll assume they are in the same directory or PYTHONPATH.
-⋮----
-app = FastAPI()
-⋮----
-# Get the model service URL from environment variable
-MODEL_SERVICE_URL = os.getenv("MODEL_SERVICE_URL", "localhost:50051")
-⋮----
-# Pydantic model for request body
-class PredictRequestData(BaseModel)
-⋮----
-input_data: str
-⋮----
-# Pydantic model for response body
-class PredictResponseData(BaseModel)
-⋮----
-output_data: str
-⋮----
-@app.post("/predict", response_model=PredictResponseData)
-async def predict(request_data: PredictRequestData)
-⋮----
-# Establish insecure gRPC channel to the model service
-# In production, use secure channels (grpc.secure_channel)
-⋮----
-stub = anops_pb2_grpc.AnOpsStub(channel)
-⋮----
-# Create the gRPC request message
-grpc_request = anops_pb2.PredictRequest(input_data=request_data.input_data)
-⋮----
-# Make the asynchronous gRPC call
-grpc_response = await stub.Predict(grpc_request)
-⋮----
-# Return the response data
-⋮----
-@app.get("/health")
-async def health_check()
-⋮----
-# Basic health check endpoint
-⋮----
-# This block is mainly for local development testing if needed,
-# Uvicorn will run the app in the Docker container.
-</file>
-
 <file path="api-service/README.md">
 # AnOps API Service
 
@@ -1129,12 +790,10 @@ The AnOps API Service is a RESTful API that provides access to the underlying `m
 This service is designed to be run as a Docker container. See the `Dockerfile` and the root `docker-compose.yml`.
 </file>
 
-<file path="api-service/requirements.txt">
-fastapi>=0.95.0,<1.0.0
-uvicorn[standard]>=0.20.0,<1.0.0
-grpcio>=1.50.0,<2.0.0
-grpcio-tools>=1.50.0,<2.0.0
-# grpcio-tools is needed only for code generation, not runtime
+<file path="api-service/requirements-dev.txt">
+pytest>=7.0.0,<8.0.0
+pytest-cov>=4.0.0,<5.0.0
+httpx>=0.24.0,<1.0.0
 </file>
 
 <file path="model-interface/anops.proto">
@@ -1162,32 +821,70 @@ message PredictResponse {
 }
 </file>
 
-<file path="model-interface/README.md">
-# AnOps Model Interface (gRPC)
-
-This directory contains the Protocol Buffer (`.proto`) definitions for the gRPC interface used for communication between the `api-service` and the `model-service`.
-
-## Overview
-
-The `api-service` acts as a gRPC client, sending requests to the `model-service`, which acts as a gRPC server implementing the defined service.
-
-## Service Definition
-
-See `anops.proto` for the formal service and message definitions.
-
-## Generating Code Stubs
-
-You will need the `protoc` compiler and the appropriate language-specific plugins (e.g., `grpcio-tools` for Python) to generate client and server code stubs from the `.proto` file.
-
-**Example (Python):**
-
-```bash
-pip install grpcio grpcio-tools
-python -m grpc_tools.protoc -I. --python_out=../model-service --pyi_out=../model-service --grpc_python_out=../model-service anops.proto
-# Adjust output paths as needed
-```
-
-This generated code will be used by the `api-service` (client stubs) and `model-service` (server base classes and stubs).
+<file path="model-service/tests/test_server.py">
+# Import the modules to be tested
+⋮----
+# --- Unit Tests for Model Logic --- #
+⋮----
+def test_load_model_resource_default()
+⋮----
+"""Test loading the default prefix."""
+# Unset env var if it exists to test default
+⋮----
+prefix = server.load_model_resource()
+⋮----
+def test_load_model_resource_env_var()
+⋮----
+"""Test loading the prefix from environment variable."""
+test_prefix = "TEST_PREFIX:"
+⋮----
+del os.environ["MODEL_PREFIX"]  # Clean up
+⋮----
+def test_run_model_success()
+⋮----
+"""Test successful model execution."""
+# Ensure default prefix is used for consistency
+⋮----
+server.MODEL_PREFIX = server.load_model_resource()  # Reload prefix
+⋮----
+input_data = "hello world"
+expected_output = "MODEL_OUTPUT: HELLO WORLD"
+output = server.run_model(input_data)
+⋮----
+def test_run_model_empty_input()
+⋮----
+"""Test model execution with empty input."""
+⋮----
+# --- Integration Tests for gRPC Servicer --- #
+⋮----
+# Fixture to set up and tear down the gRPC server for testing
+⋮----
+@pytest.fixture(scope="module")
+def grpc_server()
+⋮----
+test_server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+⋮----
+port = test_server.add_insecure_port("[::]:0")  # Use random available port
+⋮----
+yield f"localhost:{port}"  # Provide the server address to tests
+⋮----
+def test_predict_success(grpc_server)
+⋮----
+"""Test the Predict RPC call with valid input."""
+⋮----
+stub = anops_pb2_grpc.AnOpsStub(channel)
+request = anops_pb2.PredictRequest(input_data="test input")
+response = stub.Predict(request)
+⋮----
+# Assuming default prefix MODEL_OUTPUT:
+⋮----
+def test_predict_invalid_argument(grpc_server)
+⋮----
+"""Test the Predict RPC call with invalid (empty) input."""
+⋮----
+request = anops_pb2.PredictRequest(input_data="")
+⋮----
+# TODO: Add test for internal server error (e.g., by mocking run_model to raise Exception)
 </file>
 
 <file path="model-service/anops_pb2_grpc.py">
@@ -1270,28 +967,6 @@ class PredictResponse(_message.Message):
     def __init__(self, output_data: _Optional[str] = ...) -> None: ...
 </file>
 
-<file path="model-service/Dockerfile">
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
-
-# Set the working directory in the container
-WORKDIR /app
-
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the gRPC generated code and the service implementation
-# Assumes generated code (_pb2.py, _pb2_grpc.py) is in the build context
-COPY . .
-
-# Expose the port the gRPC server listens on
-EXPOSE 50051
-
-# Command to run the gRPC server
-CMD ["python", "server.py"]
-</file>
-
 <file path="model-service/README.md">
 # AnOps Model Service
 
@@ -1311,59 +986,47 @@ The AnOps Model Service is responsible for hosting and executing the actual mach
 This service is designed to be run as a Docker container. See the `Dockerfile` and the root `docker-compose.yml`. The user's model code and dependencies will be packaged into this container image during the `ao build` process.
 </file>
 
-<file path="model-service/requirements.txt">
-grpcio>=1.50.0,<2.0.0
-grpcio-tools>=1.50.0,<2.0.0
+<file path="model-service/requirements-dev.txt">
+pytest>=7.0.0,<8.0.0
+pytest-cov>=4.0.0,<5.0.0
+grpcio-testing>=1.50.0,<2.0.0
 </file>
 
-<file path="model-service/server.py">
-import logging  # Added logging
+<file path="tests/test_e2e.py">
+API_URL = "http://localhost:8000/predict"
+HEALTH_URL = "http://localhost:8000/health"
 ⋮----
-# Import the generated classes
+def wait_for_health(timeout=60)
 ⋮----
-# Configure basic logging
+start = time.time()
 ⋮----
-# --- Simple Model Logic --- #
-def run_model(input_str: str) -> str
+resp = requests.get(HEALTH_URL, timeout=2)
 ⋮----
-"""Placeholder for actual model execution."""
+def main()
 ⋮----
-# Example: Reverse the input string
-output_str = input_str[::-1]
+up = subprocess.run(["docker-compose", "up", "--build", "-d"], capture_output=True)
 ⋮----
-# ------------------------ #
+resp = requests.post(API_URL, json={"input_data": "hello world"}, timeout=5)
 ⋮----
-# Implementation of the AnOps service
-class AnOpsServicer(anops_pb2_grpc.AnOpsServicer)
-⋮----
-"""Provides methods that implement functionality of the AnOps server."""
-⋮----
-def Predict(self, request, context)
-⋮----
-"""Handles the Predict RPC call."""
-⋮----
-# --- Call the model logic --- #
-⋮----
-output = run_model(request.input_data)
-⋮----
-return anops_pb2.PredictResponse()  # Return empty response on error
-# -------------------------- #
-⋮----
-# Function to start the server
-def serve()
-⋮----
-server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-⋮----
-port = "[::]:50051"  # Listen on all interfaces, port 50051
-⋮----
-# Keep the server running
-⋮----
-time.sleep(86400)  # Keep alive for one day
-⋮----
-# Note: Ensure you have generated the _pb2.py and _pb2_grpc.py files
-# using grpc_tools.protoc before running this server.
-# Example command (run from model-interface dir):
-# python -m grpc_tools.protoc -I. --python_out=../model-service --pyi_out=../model-service --grpc_python_out=../model-service anops.proto
+data = resp.json()
+</file>
+
+<file path=".pre-commit-config.yaml">
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+      - id: black
+        language_version: python3
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.3.0
+    hooks:
+      - id: ruff
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
 </file>
 
 <file path=".repomixignore">
@@ -1378,17 +1041,37 @@ Cargo.lock
 target/
 </file>
 
-<file path="ao.toml">
-[project]
-name = "anops-dev"
+<file path="CONTRIBUTING.md">
+# Contributing to AnOps
 
-# Optional sections for check and tasks can be added later
-# [check]
-# linters = []
-# testers = []
-#
-# [tasks]
-# my-task = ["echo hello"]
+Thank you for your interest in contributing to AnOps!
+
+## How to Contribute
+
+1. **Fork the repository** and create a new branch for your feature or bugfix.
+2. **Write clear, well-documented code** that follows the style of the project.
+3. **Add or update tests** for your changes. All code must be covered by unit, integration, or end-to-end tests.
+4. **Run `ao check`** to ensure all tests and linters pass before submitting a pull request.
+5. **Document your changes** in the relevant README or code comments if needed.
+6. **Submit a pull request** with a clear description of your changes and why they are needed.
+
+## Code Style
+- Python: Use [black](https://black.readthedocs.io/en/stable/) for formatting and [ruff](https://beta.ruff.rs/docs/) for linting.
+- Rust: Use `cargo fmt` and `cargo clippy`.
+- All code must be tested and pass CI before merging.
+
+## Project Structure
+- `ao-cli/`: Rust CLI tool
+- `api-service/`: FastAPI REST API
+- `model-service/`: Python gRPC model server
+- `model-interface/`: gRPC proto definitions
+- `tests/`: End-to-end tests
+
+## Reporting Issues
+- Please use GitHub Issues to report bugs or request features.
+
+## Code of Conduct
+- Be respectful and constructive. See [Contributor Covenant](https://www.contributor-covenant.org/) for guidance.
 </file>
 
 <file path="docker-compose.yml">
@@ -1417,40 +1100,6 @@ services:
 networks:
   anops-net:
     driver: bridge
-</file>
-
-<file path="README.md">
-# AnOps
-
-`AnOps` is an orchestration tool for deploying and managing machine learning models in production. It is designed to simplify the process of deploying models by providing a consistent interface for all models, regardless of their underlying technology or implementation. `AnOps` is built on top of Docker and gRPC, making it easy to deploy and manage models in any environment that supports these technologies.
-
-`AnOps` is specifically designed to be as simple to use as possible, and usable for statistical modelling experts who may not have a strong background in software engineering. It is intended to be used by data scientists, analysts, and other professionals who need to deploy and manage machine learning models in production.
-
-`AnOps` is designed to be extensible and flexible, allowing users to easily add new models or modify existing ones. It is also designed to be easy to use, with a simple command-line interface and a RESTful API that provides access to all of the functionality of the tool.
-
-`AnOps` consists of four components:
-1. `ao` CLI
-2. `api-service` (REST API)
-3. `model-service` (Python- or R-based)
-4. `model-interface` (gRPC interface connecting `api-service` and `model-service`)
-
-
-## `ao` CLI
-The `ao` CLI is a convenience tool for managing an AnOps modeling project. It has the following subcommands:
-* `init`: Initializes a new AnOps project by creating the necessary directory structure and configuration files, linking the user's local model to the `model-service`, and setting up the `api-service` to use the model.
-* `check`: Validates the project structure and configuration files, ensuring that all required files and directories are present and correctly configured. If the model is python-based, it also runs `ruff` and `pytest` to check for linting errors and run unit tests.
-* `run`: Executes a task defined in the configuration file, which can include running shell commands or other `ao` commands. This is useful for orchestrating complex workflows in an analytics or modeling project.
-* `build`: Builds the `model-service` Docker image using the provided Dockerfile and configuration files. After building, it will lint and run tests/coverage on the model code one last time before pushing the image to a Docker registry.
-* `config`: Displays the current configuration settings for the project, including the project name, model type, and any other relevant settings. This is useful for verifying that the project is set up correctly and that all required settings are in place.
-
-## `api-service`
-The `api-service` is a RESTful API that provides access to a single endpoint for using models that fulfill the `model-interface` in production. It is implemented as a Docker container so that it can be deployed in any environment that supports Docker. The API is designed to be simple and easy to use, with a focus on providing a consistent interface for all models.
-
-## `model-service`
-The `model-service` is a Docker container that runs a model in production. It is designed to be used with the `model-interface` and can be deployed in any environment that supports Docker. The `model-service` is responsible for running the model and providing predictions to the `api-service`.
-
-## `model-interface`
-The `model-interface` is a gRPC interface that connects the `api-service` and the `model-service`. It is designed to be simple and easy to use, with a focus on providing a consistent interface for all models. The `model-interface` is responsible for handling requests from the `api-service` and forwarding them to the `model-service`.
 </file>
 
 <file path="repomix.config.json">
@@ -1489,6 +1138,730 @@ The `model-interface` is a gRPC interface that connects the `api-service` and th
     "encoding": "o200k_base"
   }
 }
+</file>
+
+<file path="ao-cli/src/build.rs">
+use std::path::Path;
+⋮----
+use crate::config;
+use crate::utils::{find_project_root, run_tool, generate_grpc_code}; // Added generate_grpc_code
+use crate::check; // Import the check module to run pre-build checks
+⋮----
+/// Handler for `ao build`.
+/// Finds the project root, loads config, generates gRPC code, runs checks, and builds Docker images.
+///
+/// # Arguments
+⋮----
+/// * `path_str` - Path within the project directory to start searching from.
+⋮----
+/// # Errors
+⋮----
+/// Returns an error if the project root is not found, config loading fails,
+/// gRPC generation fails, checks fail, or any Docker build command fails.
+pub fn run(path_str: String) -> Result<()> {
+⋮----
+println!("Starting build from '{}'", start_path.display());
+⋮----
+// Find project root
+let project_path = find_project_root(start_path)
+.with_context(|| format!("Failed to find project root starting from '{}'", start_path.display()))?;
+println!("Found project root at '{}'", project_path.display());
+⋮----
+// Load configuration
+⋮----
+.context("Failed to load project configuration")?;
+⋮----
+println!("Building project: {}", project_name);
+⋮----
+// --- Generate gRPC Code --- //
+generate_grpc_code(&project_path)
+.context("Failed to generate gRPC code")?;
+// --- End Generate gRPC Code --- //
+⋮----
+// --- Pre-build Checks --- //
+println!("--- Running Pre-Build Checks ---");
+// Use the existing check::run function
+check::run(path_str.clone()) // Pass the original path string
+.context("Pre-build checks failed")?;
+println!("--- Pre-Build Checks Passed ---");
+⋮----
+// --- Build Docker Images --- //
+println!("--- Building Docker Images ---");
+⋮----
+// Define image names (using project name from config)
+// TODO: Allow overriding tags/names via config or CLI args later
+let api_image_name = format!("{}-api-service:latest", project_name);
+let model_image_name = format!("{}-model-service:latest", project_name);
+⋮----
+// Build api-service
+let api_service_path = project_path.join("api-service");
+if api_service_path.exists() && api_service_path.is_dir() {
+println!("Building {}...", api_image_name);
+let build_cmd = format!(
+⋮----
+run_tool(&build_cmd, &api_service_path)
+.with_context(|| format!("Failed to build api-service image: {}", api_image_name))?;
+println!("Successfully built {}", api_image_name);
+⋮----
+println!("Skipping api-service build: directory not found at {:?}", api_service_path);
+⋮----
+// Build model-service
+let model_service_path = project_path.join("model-service");
+if model_service_path.exists() && model_service_path.is_dir() {
+println!("Building {}...", model_image_name);
+// Note: This assumes the Docker context is the model-service directory itself.
+// If generated gRPC code needs to be included from model-interface,
+// the Dockerfile or build process might need adjustment (e.g., copying files before build).
+⋮----
+run_tool(&build_cmd, &model_service_path)
+.with_context(|| format!("Failed to build model-service image: {}", model_image_name))?;
+println!("Successfully built {}", model_image_name);
+⋮----
+println!("Skipping model-service build: directory not found at {:?}", model_service_path);
+⋮----
+println!("--- Docker Images Built Successfully ---");
+⋮----
+Ok(())
+⋮----
+mod tests {
+// TODO: Add tests for build::run
+// - Test success case (mocks docker build, grpc generation, check::run)
+// - Test failure if grpc generation fails
+// - Test failure if check::run fails
+// - Test failure if docker build fails
+// - Test finding root from subdir
+</file>
+
+<file path="ao-cli/src/init.rs">
+use std::fs;
+use std::path::Path;
+⋮----
+// Basic placeholder content for generated files
+⋮----
+/// Handler for `ao init`.
+/// Creates the basic project directory structure and configuration file.
+///
+/// # Arguments
+⋮----
+/// * `name` - The name of the project directory to initialize.
+⋮----
+/// # Errors
+⋮----
+/// Returns an error if initialization fails (e.g., directory creation, file creation).
+pub fn run(name: String) -> Result<()> {
+⋮----
+println!("Initializing project '{}' at {:?}", name, project_path);
+⋮----
+// Create base directory
+⋮----
+.with_context(|| format!("Failed to create project directory: {}", project_path.display()))?;
+println!("Created directory: {:?}", project_path);
+⋮----
+// Create standard subdirectories
+⋮----
+for subdir in subdirs.iter() {
+let dir_path = project_path.join(subdir);
+⋮----
+.with_context(|| format!("Failed to create subdirectory: {}", dir_path.display()))?;
+println!("Created directory: {:?}", dir_path);
+⋮----
+// Create ao.toml configuration file
+let config_path = project_path.join("ao.toml");
+let config_content = DEFAULT_AO_TOML_CONTENT.replace("{}", &name); // Basic placeholder, replace name
+⋮----
+.with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
+println!("Created config file: {:?}", config_path);
+⋮----
+// Create .gitignore
+let gitignore_path = project_path.join(".gitignore");
+⋮----
+.with_context(|| format!("Failed to write .gitignore file: {}", gitignore_path.display()))?;
+println!("Created file: {:?}", gitignore_path);
+⋮----
+// Create Dockerfiles
+let api_dockerfile_path = project_path.join("api-service/Dockerfile");
+⋮----
+.with_context(|| format!("Failed to write api-service Dockerfile: {}", api_dockerfile_path.display()))?;
+println!("Created file: {:?}", api_dockerfile_path);
+⋮----
+let model_dockerfile_path = project_path.join("model-service/Dockerfile");
+⋮----
+.with_context(|| format!("Failed to write model-service Dockerfile: {}", model_dockerfile_path.display()))?;
+println!("Created file: {:?}", model_dockerfile_path);
+⋮----
+// Create docker-compose.yml
+let compose_path = project_path.join("docker-compose.yml");
+⋮----
+.with_context(|| format!("Failed to write docker-compose.yml: {}", compose_path.display()))?;
+println!("Created file: {:?}", compose_path);
+⋮----
+// Create model-interface proto file
+let proto_path = project_path.join("model-interface/anops.proto");
+⋮----
+.with_context(|| format!("Failed to write anops.proto: {}", proto_path.display()))?;
+println!("Created file: {:?}", proto_path);
+⋮----
+// Create READMEs
+let api_readme_path = project_path.join("api-service/README.md");
+⋮----
+.with_context(|| format!("Failed to write api-service README: {}", api_readme_path.display()))?;
+println!("Created file: {:?}", api_readme_path);
+⋮----
+let model_readme_path = project_path.join("model-service/README.md");
+⋮----
+.with_context(|| format!("Failed to write model-service README: {}", model_readme_path.display()))?;
+println!("Created file: {:?}", model_readme_path);
+⋮----
+let interface_readme_path = project_path.join("model-interface/README.md");
+⋮----
+.with_context(|| format!("Failed to write model-interface README: {}", interface_readme_path.display()))?;
+println!("Created file: {:?}", interface_readme_path);
+⋮----
+// Create placeholder files in services (optional, but good practice)
+// e.g., api-service/main.py, model-service/server.py
+// fs::write(project_path.join("api-service/main.py"), "# FastAPI app placeholder")?;
+// fs::write(project_path.join("model-service/server.py"), "# gRPC server placeholder")?;
+⋮----
+println!("Project '{}' initialized successfully.", name);
+println!("Next steps:");
+println!("  - cd {}", name);
+println!("  - Review READMEs in api-service, model-service, model-interface.");
+println!("  - Implement your model in model-service.");
+println!("  - Implement the API endpoints in api-service.");
+println!("  - Generate gRPC code (see model-interface/README.md).");
+println!("  - Configure dependencies (e.g., requirements.txt).");
+println!("  - Run 'ao build' to build the service images.");
+println!("  - Run 'docker-compose up' to start the services.");
+⋮----
+Ok(())
+⋮----
+mod tests {
+⋮----
+use tempfile::tempdir;
+⋮----
+fn run_succeeds_and_creates_structure() {
+let tmp_dir = tempdir().unwrap();
+⋮----
+// Run the init command relative to the temp dir
+let result = run(tmp_dir.path().join(project_name).to_str().unwrap().to_string());
+assert!(result.is_ok());
+⋮----
+let project_path = tmp_dir.path().join(project_name);
+⋮----
+// Check if base directory exists
+assert!(project_path.exists());
+assert!(project_path.is_dir());
+⋮----
+// Check if standard subdirectories exist
+⋮----
+assert!(dir_path.exists(), "Directory missing: {}", subdir);
+assert!(dir_path.is_dir(), "Path is not a directory: {}", subdir);
+⋮----
+// Check if core files exist
+⋮----
+for file in core_files.iter() {
+let file_path = project_path.join(file);
+assert!(file_path.exists(), "File missing: {}", file);
+assert!(file_path.is_file(), "Path is not a file: {}", file);
+⋮----
+// Check if config file has basic content
+⋮----
+let content = fs::read_to_string(config_path).unwrap();
+assert!(content.contains(&format!("[project]
+⋮----
+// Check .gitignore content (basic check)
+⋮----
+let gitignore_content = fs::read_to_string(gitignore_path).unwrap();
+assert!(gitignore_content.contains("__pycache__/"));
+assert!(gitignore_content.contains("*.pyc"));
+⋮----
+// Clean up is handled by tempdir dropping
+⋮----
+fn run_fails_if_cannot_create_dir() {
+// This test is tricky because permissions are hard to simulate reliably
+// across platforms in a unit test without running as root or modifying
+// system state. We rely on the OS preventing creation in restricted areas.
+// Trying to create directly in `/` (on Unix-like systems) might fail
+// without root privileges.
+if cfg!(unix) {
+⋮----
+// Attempt to run the init command in a restricted path
+let result = run(project_name.to_string());
+// We expect this to fail, likely with a permission error context.
+assert!(result.is_err());
+assert!(result.unwrap_err().to_string().contains("Failed to create project directory"));
+⋮----
+// Skip this specific scenario on non-Unix platforms where
+// root directory permissions might behave differently.
+println!("Skipping root directory creation test on non-Unix platform.");
+</file>
+
+<file path="ao-cli/src/utils.rs">
+use std::fs;
+use shlex;
+⋮----
+/// Searches upwards from the starting path for a file named `ao.toml`.
+/// Returns the path to the directory containing `ao.toml` if found.
+pub fn find_project_root(start_path: &Path) -> Result<PathBuf> {
+println!("find_project_root: Starting search from '{}'", start_path.display()); // Added log
+// Canonicalize the starting path to resolve symlinks and relative components
+⋮----
+.canonicalize()
+.with_context(|| format!("Failed to canonicalize path: {}", start_path.display()))?;
+println!("find_project_root: Canonical path is '{}'", current_path.display()); // Added log
+⋮----
+let config_path = current_path.join("ao.toml");
+println!("find_project_root: Checking for config at '{}'", config_path.display()); // Added log
+if config_path.exists() && config_path.is_file() {
+println!("find_project_root: Found config at '{}'", config_path.display()); // Added log
+return Ok(current_path);
+⋮----
+// Move up to the parent directory
+if let Some(parent) = current_path.parent() {
+// Check if we are already at the root to prevent infinite loop
+⋮----
+println!("find_project_root: Reached filesystem root, config not found."); // Added log
+⋮----
+println!("find_project_root: Moving up to parent '{}'", parent.display()); // Added log
+current_path = parent.to_path_buf();
+⋮----
+// Should not happen if parent == current_path check works, but as a safeguard
+println!("find_project_root: No parent found, config not found."); // Added log
+⋮----
+// If loop finishes without returning, the file was not found
+bail!(
+⋮----
+/// Executes an external tool/command within the project directory.
+///
+/// # Arguments
+⋮----
+/// * `command_str` - The command string to execute (e.g., "ruff check .").
+/// * `project_root` - The path to the project root directory, used as the working directory.
+⋮----
+/// # Errors
+⋮----
+/// Returns an error if the command cannot be executed or if it exits with a non-zero status.
+pub fn run_tool(command_str: &str, project_root: &Path) -> Result<()> {
+// Use shlex for robust shell-like parsing
+⋮----
+.ok_or_else(|| anyhow!("Failed to parse command string with shlex: '{}'", command_str))?;
+if parts.is_empty() {
+bail!("Command string '{}' resulted in no executable parts.", command_str);
+⋮----
+command.args(args);
+command.current_dir(project_root);
+command.stdout(Stdio::inherit());
+command.stderr(Stdio::inherit());
+⋮----
+.status()
+.with_context(|| format!("Failed to execute command: '{}'", command_str))?;
+if status.success() {
+println!("Tool '{}' finished successfully.", command_str);
+Ok(())
+⋮----
+command.stdout(Stdio::inherit()); // Stream stdout directly
+command.stderr(Stdio::inherit()); // Stream stderr directly
+⋮----
+bail!("Tool '{}' failed with status: {}", command_str, status);
+⋮----
+/// Generates gRPC code using python -m grpc_tools.protoc
+/// Assumes proto files are in model-interface and outputs to api-service and model-service.
+fn generate_grpc_code(project_root: &Path) -> Result<()> {
+println!("--- Generating gRPC Code ---");
+let interface_dir = project_root.join("model-interface");
+let api_service_dir = project_root.join("api-service");
+let model_service_dir = project_root.join("model-service");
+let proto_file = interface_dir.join("anops.proto");
+⋮----
+if !proto_file.exists() {
+bail!("Proto file not found at {}", proto_file.display());
+⋮----
+// Ensure output directories exist
+⋮----
+.with_context(|| format!("Failed to ensure api-service directory exists: {}", api_service_dir.display()))?;
+⋮----
+.with_context(|| format!("Failed to ensure model-service directory exists: {}", model_service_dir.display()))?;
+⋮----
+// Construct the command. Using Command directly to avoid run_tool's parsing issues for now.
+// We run it from the project_root context.
+// Note: Assumes 'python' and 'grpc_tools.protoc' are available in the PATH.
+⋮----
+command.arg("-m")
+.arg("grpc_tools.protoc")
+.arg(format!("-I{}", interface_dir.display())) // Include path for proto file
+// Output to api-service
+.arg(format!("--python_out={}", api_service_dir.display()))
+.arg(format!("--pyi_out={}", api_service_dir.display()))
+.arg(format!("--grpc_python_out={}", api_service_dir.display()))
+// Output to model-service
+.arg(format!("--python_out={}", model_service_dir.display()))
+.arg(format!("--pyi_out={}", model_service_dir.display()))
+.arg(format!("--grpc_python_out={}", model_service_dir.display()))
+// The proto file itself (relative to include path)
+.arg(proto_file.file_name().unwrap().to_str().unwrap()); // Use just the filename relative to -I
+⋮----
+command.current_dir(project_root); // Run from project root
+⋮----
+println!("Executing: {:?}", command);
+⋮----
+.context("Failed to execute python -m grpc_tools.protoc command. Is grpcio-tools installed and python in PATH?")?;
+⋮----
+println!("gRPC code generated successfully.");
+println!("--- gRPC Code Generation Finished ---");
+⋮----
+bail!("gRPC code generation failed with status: {}", status);
+⋮----
+mod tests {
+⋮----
+use crate::init; // To setup project structure
+⋮----
+use tempfile::tempdir;
+⋮----
+// TODO: Add tests for find_project_root
+// TODO: Add tests for run_tool (mocking Command)
+⋮----
+fn generate_grpc_code_runs_without_panic_on_valid_structure() {
+// This is a basic test to ensure the function can be called,
+// finds paths, and attempts to run the command without panicking.
+// It DOES NOT verify the command executes correctly or files are generated,
+// as that requires python/grpcio-tools and filesystem changes.
+// TODO: Implement proper mocking of std::process::Command for robust testing.
+⋮----
+let tmp_dir = tempdir().unwrap();
+⋮----
+let project_path = tmp_dir.path().join(project_name);
+⋮----
+// Use init::run to create the necessary structure
+init::run(project_path.to_str().unwrap().to_string()).unwrap();
+⋮----
+// Ensure the proto file exists (created by init::run)
+assert!(project_path.join("model-interface/anops.proto").exists());
+⋮----
+// Call the function - we expect Ok(()) if it constructs the command,
+// even if the command itself fails externally.
+// If python/grpcio-tools are not installed, this might return Err,
+// but the test aims to catch panics within generate_grpc_code itself.
+let result = generate_grpc_code(&project_path);
+⋮----
+// Basic assertion: Check if the function completed its logic.
+// If python/grpcio-tools aren't installed, it will likely return Err here.
+// If they ARE installed, it should return Ok.
+// We accept either Ok or an Err containing the execution failure message.
+⋮----
+Ok(_) => println!("generate_grpc_code returned Ok (python/grpcio-tools likely found)"),
+⋮----
+let msg = e.to_string();
+println!("generate_grpc_code returned Err: {} (python/grpcio-tools likely not found or failed)", msg);
+// Check it's the expected execution error, not a setup error
+assert!(msg.contains("Failed to execute") || msg.contains("gRPC code generation failed"));
+⋮----
+fn generate_grpc_code_fails_if_proto_missing() {
+⋮----
+// Create partial structure WITHOUT the proto file
+fs::create_dir_all(project_path.join("model-interface")).unwrap();
+fs::create_dir_all(project_path.join("api-service")).unwrap();
+fs::create_dir_all(project_path.join("model-service")).unwrap();
+// Create ao.toml so find_project_root works if called implicitly later
+fs::write(project_path.join("ao.toml"), "[project]\nname=\"test\"").unwrap();
+⋮----
+assert!(result.is_err());
+assert!(result.unwrap_err().to_string().contains("Proto file not found"));
+</file>
+
+<file path="ao-cli/Cargo.toml">
+[package]
+name = "ao"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.2", features = ["derive"] }
+anyhow = "1.0"
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3.10"
+</file>
+
+<file path="api-service/Dockerfile">
+# Use an official Python runtime as a parent image
+FROM python:3.11-slim
+
+# Create a non-root user
+RUN useradd -m appuser
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy only necessary files
+COPY main.py .
+COPY anops_pb2.py .
+COPY anops_pb2_grpc.py .
+COPY anops_pb2.pyi .
+
+# Switch to non-root user
+USER appuser
+
+# Expose the port the app runs on
+EXPOSE 8000
+
+# Command to run the application using Uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+</file>
+
+<file path="api-service/main.py">
+# Import the generated gRPC classes
+# Assumes the generated files (_pb2.py, _pb2_grpc.py) are accessible.
+# This might require adjusting PYTHONPATH or copying files during build.
+# For simplicity, we'll assume they are in the same directory or PYTHONPATH.
+⋮----
+# Configure logging
+⋮----
+logger = logging.getLogger(__name__)
+⋮----
+app = FastAPI()
+⋮----
+# Get the model service URL from environment variable
+MODEL_SERVICE_URL = os.getenv("MODEL_SERVICE_URL", "localhost:50051")
+⋮----
+# Pydantic model for request body
+class PredictRequestData(BaseModel)
+⋮----
+input_data: str
+⋮----
+# Pydantic model for response body
+class PredictResponseData(BaseModel)
+⋮----
+output_data: str
+⋮----
+@app.post("/predict", response_model=PredictResponseData)
+async def predict(request_data: PredictRequestData)
+⋮----
+# Establish insecure gRPC channel to the model service
+# In production, use secure channels (grpc.secure_channel)
+⋮----
+stub = anops_pb2_grpc.AnOpsStub(channel)
+⋮----
+# Create the gRPC request message
+grpc_request = anops_pb2.PredictRequest(input_data=request_data.input_data)
+⋮----
+# Make the asynchronous gRPC call
+grpc_response = await stub.Predict(grpc_request)
+⋮----
+# Return the response data
+⋮----
+@app.get("/health")
+async def health_check()
+⋮----
+# Basic health check endpoint
+⋮----
+# This block is mainly for local development testing if needed,
+# Uvicorn will run the app in the Docker container.
+</file>
+
+<file path="api-service/requirements.txt">
+fastapi>=0.95.0,<1.0.0
+uvicorn[standard]>=0.20.0,<1.0.0
+grpcio>=1.50.0,<2.0.0
+# grpcio-tools is needed only for code generation, not runtime
+</file>
+
+<file path="model-interface/README.md">
+# AnOps Model Interface (gRPC)
+
+This directory contains the Protocol Buffer (`.proto`) definitions for the gRPC interface used for communication between the `api-service` and the `model-service`.
+
+## Overview
+
+The `api-service` acts as a gRPC client, sending requests to the `model-service`, which acts as a gRPC server implementing the defined service.
+
+## Service Definition
+
+See `anops.proto` for the formal service and message definitions.
+
+## Generating Code Stubs
+
+The necessary Python client and server code stubs (`*_pb2.py`, `*_pb2_grpc.py`, `*_pb2.pyi`) are **automatically generated** when you run the `ao build` command.
+
+The generated files are placed into both the `api-service` and `model-service` directories. You do not need to run `protoc` manually. Ensure you have `grpcio-tools` installed in the Python environment where you run `ao build` (or ensure `python -m grpc_tools.protoc` is runnable).
+</file>
+
+<file path="model-service/Dockerfile">
+# Use an official Python runtime as a parent image
+FROM python:3.11-slim
+
+# Create a non-root user
+RUN useradd -m appuser
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy only necessary files
+COPY server.py .
+COPY anops_pb2.py .
+COPY anops_pb2_grpc.py .
+COPY anops_pb2.pyi .
+
+# Switch to non-root user
+USER appuser
+
+# Expose the port the gRPC server listens on
+EXPOSE 50051
+
+# Command to run the gRPC server
+CMD ["python", "server.py"]
+</file>
+
+<file path="model-service/requirements.txt">
+grpcio>=1.50.0,<2.0.0
+grpcio-tools>=1.50.0,<2.0.0
+# Add other model-specific dependencies here (e.g., scikit-learn, pandas)
+</file>
+
+<file path="model-service/server.py">
+import os  # Added os
+⋮----
+# Import the generated classes
+⋮----
+# Configure basic logging
+⋮----
+logger = logging.getLogger(__name__)
+⋮----
+# --- Simple Model Logic --- #
+def load_model_resource()
+⋮----
+"""Placeholder for loading any model artifacts (files, connections, etc.)."""
+# Example: Load a prefix from an environment variable or a file
+prefix = os.getenv("MODEL_PREFIX", "MODEL_OUTPUT:")
+⋮----
+# Load resource once when the server starts (or lazily on first request)
+MODEL_PREFIX = load_model_resource()
+⋮----
+def run_model(input_str: str) -> str
+⋮----
+"""Placeholder for actual model execution."""
+⋮----
+# Example: Add a prefix and convert to uppercase
+output_str = f"{MODEL_PREFIX} {input_str.upper()}"
+⋮----
+# ------------------------ #
+⋮----
+# Implementation of the AnOps service
+class AnOpsServicer(anops_pb2_grpc.AnOpsServicer)
+⋮----
+"""Provides methods that implement functionality of the AnOps server."""
+⋮----
+def Predict(self, request, context)
+⋮----
+"""Handles the Predict RPC call."""
+⋮----
+# --- Call the model logic --- #
+⋮----
+output = run_model(request.input_data)
+⋮----
+return anops_pb2.PredictResponse()  # Return empty response on error
+⋮----
+logger.error(f"Model execution failed: {e}", exc_info=True)  # Log traceback
+⋮----
+# -------------------------- #
+⋮----
+# Function to start the server
+def serve()
+⋮----
+server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+⋮----
+port = "[::]:50051"  # Listen on all interfaces, port 50051
+⋮----
+# Keep the server running
+⋮----
+time.sleep(86400)  # Keep alive for one day
+⋮----
+server.stop(0)  # Graceful stop with no grace period
+⋮----
+# TODO: Add unit tests for the model logic (run_model, load_model_resource).
+# TODO: Add integration tests for the gRPC server (AnOpsServicer.Predict).
+</file>
+
+<file path="ao.toml">
+[project]
+name = "anops-dev"
+
+[check]
+linters = []
+testers = [
+    "pytest --cov=server.py --cov-report=term --maxfail=1 --disable-warnings -C model-service/tests",
+    "pytest --cov=main.py --cov-report=term --maxfail=1 --disable-warnings -C api-service/tests",
+    "pytest --maxfail=1 --disable-warnings -C tests"
+]
+
+# [tasks]
+# my-task = ["echo hello"]
+</file>
+
+<file path="README.md">
+# AnOps
+
+AnOps is an orchestration tool for deploying and managing machine learning models in production. It is designed to simplify the process of deploying models by providing a consistent interface for all models, regardless of their underlying technology or implementation. AnOps is built on top of Docker and gRPC, making it easy to deploy and manage models in any environment that supports these technologies.
+
+## Components
+
+- **ao CLI**: Command-line tool for project management, validation, and automation.
+- **api-service**: REST API (FastAPI) that exposes model predictions via HTTP and forwards requests to model-service via gRPC.
+- **model-service**: Python (or R, future) service that implements the gRPC interface and runs the actual model logic.
+- **model-interface**: Protocol Buffers definition for the gRPC contract between api-service and model-service.
+
+## Quickstart
+
+1. **Initialize a new project**
+   ```sh
+   ao init myproject
+   cd myproject
+   ```
+2. **Implement your model** in `model-service/server.py` and update the gRPC interface in `model-interface/anops.proto` if needed.
+3. **Build and generate code**
+   ```sh
+   ao build
+   ```
+   This will generate gRPC code and build Docker images for both services.
+4. **Run the stack**
+   ```sh
+   docker-compose up --build
+   ```
+5. **Test the API**
+   ```sh
+   curl -X POST http://localhost:8000/predict -H 'Content-Type: application/json' -d '{"input_data": "hello world"}'
+   ```
+
+## Testing
+
+- Run all tests (unit, integration, end-to-end):
+  ```sh
+  ao check
+  ```
+- Tests are located in `api-service/tests/`, `model-service/tests/`, and `tests/` (end-to-end).
+
+## Best Practices
+
+- All code is tested and linted before build and deploy.
+- Docker images run as non-root users and only include necessary files.
+- gRPC code generation is automated via `ao build`.
+- Project structure and configuration are validated with `ao check`.
+
+## Contributing
+
+See `ACTIONPLAN.md` for the current development roadmap and checklist.
+
+## License
+
+MIT
 </file>
 
 </files>
