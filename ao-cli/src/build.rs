@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::path::Path;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 use crate::config;
 use crate::utils::{find_project_root, run_tool, generate_grpc_code}; // Added generate_grpc_code

@@ -108,4 +108,28 @@ def test_predict_internal_error(grpc_server):
             assert "Internal server error" in rpc_error.value.details()
 
 
-# TODO: Add test for internal server error (e.g., by mocking run_model to raise Exception)
+@pytest.mark.asyncio
+async def test_predict_internal_error(grpc_server, monkeypatch):
+    """Test the Predict RPC call when run_model raises an unexpected Exception."""
+
+    # Patch run_model to raise a generic Exception
+    def mock_run_model_error(input_data):
+        raise Exception("Simulated internal model error")
+
+    monkeypatch.setattr(server, "run_model", mock_run_model_error)
+
+    async with grpc.aio.insecure_channel(grpc_server) as channel:
+        stub = anops_pb2_grpc.AnOpsStub(channel)
+        request = anops_pb2.PredictRequest(input_data="trigger error")
+
+        with pytest.raises(grpc.aio.AioRpcError) as excinfo:
+            await stub.Predict(request)
+
+        assert excinfo.value.code() == grpc.StatusCode.INTERNAL
+        assert "Simulated internal model error" in excinfo.value.details()
+
+    # Restore original function if necessary (though monkeypatch handles scope)
+    monkeypatch.undo()
+
+
+# TODO: Add test for internal server error (e.g., by mocking run_model to raise Exception) - DONE

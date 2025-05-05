@@ -1,9 +1,7 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use tracing::{info, warn, error};
+use tracing::info;
 
 use crate::config; // Import the config module
 use crate::utils::{find_project_root, run_tool}; // Import from utils
@@ -93,7 +91,7 @@ pub fn run(path_str: String) -> Result<()> {
     // --- Tool Execution --- //
 
     // Run configured linters
-    if (!config.check.linters.is_empty()) {
+    if !config.check.linters.is_empty() {
         info!("--- Running Linters ---");
         for linter_cmd in &config.check.linters {
             run_tool(linter_cmd, &project_path)
@@ -105,7 +103,7 @@ pub fn run(path_str: String) -> Result<()> {
     }
 
     // Run configured testers
-    if (!config.check.testers.is_empty()) {
+    if !config.check.testers.is_empty() {
         info!("--- Running Testers ---");
         for tester_cmd in &config.check.testers {
             run_tool(tester_cmd, &project_path)
@@ -124,7 +122,9 @@ pub fn run(path_str: String) -> Result<()> {
 mod tests {
     use super::*;
     use crate::init;
+    use anyhow::{Context, Result};
     use std::fs;
+    use std::path::{Path, PathBuf}; // Import PathBuf
     use tempfile::tempdir;
 
     // Helper to create a valid project structure for testing check

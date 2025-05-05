@@ -1,0 +1,125 @@
+warning: unused imports: `error` and `warn`
+ --> src/init.rs:4:21
+  |
+4 | use tracing::{info, warn, error};
+  |                     ^^^^  ^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `std::fs`
+ --> src/check.rs:1:5
+  |
+1 | use std::fs;
+  |     ^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/check.rs:2:23
+  |
+2 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused imports: `Command` and `Stdio`
+ --> src/check.rs:3:20
+  |
+3 | use std::process::{Command, Stdio};
+  |                    ^^^^^^^  ^^^^^
+
+warning: unused imports: `error` and `warn`
+ --> src/check.rs:6:21
+  |
+6 | use tracing::{info, warn, error};
+  |                     ^^^^  ^^^^^
+
+warning: unnecessary parentheses around `if` condition
+  --> src/check.rs:96:8
+   |
+96 |     if (!config.check.linters.is_empty()) {
+   |        ^                                ^
+   |
+   = note: `#[warn(unused_parens)]` on by default
+help: remove these parentheses
+   |
+96 -     if (!config.check.linters.is_empty()) {
+96 +     if !config.check.linters.is_empty() {
+   |
+
+warning: unnecessary parentheses around `if` condition
+   --> src/check.rs:108:8
+    |
+108 |     if (!config.check.testers.is_empty()) {
+    |        ^                                ^
+    |
+help: remove these parentheses
+    |
+108 -     if (!config.check.testers.is_empty()) {
+108 +     if !config.check.testers.is_empty() {
+    |
+
+warning: unused import: `std::env`
+ --> src/run.rs:3:5
+  |
+3 | use std::env;
+  |     ^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/run.rs:4:23
+  |
+4 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused imports: `Command` and `Stdio`
+ --> src/run.rs:5:20
+  |
+5 | use std::process::{Command, Stdio};
+  |                    ^^^^^^^  ^^^^^
+
+warning: unused import: `error`
+ --> src/build.rs:3:27
+  |
+3 | use tracing::{info, warn, error};
+  |                           ^^^^^
+
+warning: `ao` (lib) generated 11 warnings (run `cargo fix --lib -p ao` to apply 11 suggestions)
+warning: unused import: `fmt`
+ --> src/main.rs:3:26
+  |
+3 | use tracing_subscriber::{fmt, EnvFilter};
+  |                          ^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+   Compiling ao v0.1.0 (/Users/andy/dev/anops/ao-cli)
+warning: `ao` (bin "ao" test) generated 1 warning (run `cargo fix --bin "ao" --tests` to apply 1 suggestion)
+warning: unused import: `std::env`
+   --> src/utils.rs:229:13
+    |
+229 |         use std::env;
+    |             ^^^^^^^^
+
+error[E0382]: borrow of moved value: `result`
+    --> src/run.rs:225:17
+     |
+221  |         let result = run("build".to_string(), models_path.to_str().unwrap().to_string());
+     |             ------ move occurs because `result` has type `std::result::Result<(), anyhow::Error>`, which does not implement the `Copy` trait
+222  |         if result.is_err() {
+223  |             eprintln!("run_works_when_called_from_subdir failed: {}", result.unwrap_err());
+     |                                                                       ------ ------------ `result` moved due to this method call
+     |                                                                       |
+     |                                                                       help: consider calling `.as_ref()` or `.as_mut()` to borrow the type's contents
+224  |         }
+225  |         assert!(result.is_ok());
+     |                 ^^^^^^ value borrowed here after move
+     |
+note: `std::result::Result::<T, E>::unwrap_err` takes ownership of the receiver `self`, which moves `result`
+    --> /Users/andy/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/result.rs:1193:23
+     |
+1193 |     pub fn unwrap_err(self) -> E
+     |                       ^^^^
+help: you could `clone` the value and consume it, if the `anyhow::Error: Clone` trait bound could be satisfied
+     |
+223  |             eprintln!("run_works_when_called_from_subdir failed: {}", result.clone().unwrap_err());
+     |                                                                             ++++++++
+
+For more information about this error, try `rustc --explain E0382`.
+warning: `ao` (lib test) generated 10 warnings (9 duplicates)
+error: could not compile `ao` (lib test) due to 1 previous error; 10 warnings emitted

@@ -1,8 +1,6 @@
 use crate::config;
 use anyhow::{bail, Context, Result};
-use std::env;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::path::Path;
 use tracing::{info, warn, error};
 
 use crate::utils::{find_project_root, run_tool}; // Import from utils
@@ -66,6 +64,7 @@ mod tests {
     use super::*;
     use crate::init; // To set up a project structure
     use std::fs;
+    use std::path::{Path, PathBuf}; // Import PathBuf
     use tempfile::tempdir;
 
     // Helper to create a project with a specific ao.toml content
@@ -215,14 +214,16 @@ build = ["mkdir build_output_subdir"]
             project_name
         );
         let project_path = setup_project_with_config(tmp_dir.path(), &config_content).unwrap();
-        let models_path = project_path.join("models"); // Subdir created by init
+        let subdir_path = project_path.join("api-service");
+        // Explicitly ensure the directory exists before trying to run from it
+        fs::create_dir_all(&subdir_path).expect("Failed to create api-service subdir for test");
+        assert!(subdir_path.exists(), "Subdirectory api-service does not exist for test setup");
 
-        // Run from the 'models' subdirectory
-        let result = run("build".to_string(), models_path.to_str().unwrap().to_string());
-        if result.is_err() {
-            eprintln!("run_works_when_called_from_subdir failed: {}", result.unwrap_err());
-        }
-        assert!(result.is_ok());
+        // Run from the 'api-service' subdirectory
+        let result = run("build".to_string(), subdir_path.to_str().unwrap().to_string());
+
+        assert!(result.is_ok(), "run_works_when_called_from_subdir failed: {:?}", result.err());
+
         // Check side effect relative to the project root
         assert!(project_path.join("build_output_subdir").exists());
         assert!(project_path.join("build_output_subdir").is_dir());

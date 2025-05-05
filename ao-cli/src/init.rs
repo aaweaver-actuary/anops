@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::Path;
-use tracing::{info, warn, error};
+use std::path::{Path, PathBuf};
+use tracing::info;
 
 // Basic placeholder content for generated files
 const DEFAULT_AO_TOML_CONTENT: &str = r#"[project]
@@ -171,6 +171,78 @@ Contains the Protocol Buffer (`.proto`) definitions for the gRPC interface betwe
 See `anops.proto` and the root README for more details.
 "#;
 
+const API_SERVICE_REQUIREMENTS: &str = r#"fastapi>=0.100.0,<1.0.0
+uvicorn[standard]>=0.20.0,<1.0.0
+grpcio>=1.50.0,<2.0.0
+python-json-logger>=2.0.0,<3.0.0
+"#;
+
+const MODEL_SERVICE_REQUIREMENTS: &str = r#"grpcio>=1.50.0,<2.0.0
+python-json-logger>=2.0.0,<3.0.0
+# Add other model dependencies here, e.g.:
+# pandas
+# scikit-learn
+"#;
+
+const API_SERVICE_MAIN_PY: &str = r#"# Placeholder main.py for api-service
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+# TODO: Implement /predict endpoint
+"#;
+
+const MODEL_SERVICE_SERVER_PY: &str = r#"# Placeholder server.py for model-service
+import time
+from concurrent import futures
+import grpc
+
+# TODO: Import generated gRPC code
+# import anops_pb2
+# import anops_pb2_grpc
+
+_ONE_DAY_IN_SECONDS = 60 * 60 * 24
+
+# TODO: Implement the AnOpsServicer class
+# class AnOpsServicer(anops_pb2_grpc.AnOpsServicer):
+#     def Predict(self, request, context):
+#         # Implement prediction logic here
+#         return anops_pb2.PredictResponse(output_data=f"Processed: {request.input_data}")
+
+def serve():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    # TODO: Add servicer to server
+    # anops_pb2_grpc.add_AnOpsServicer_to_server(AnOpsServicer(), server)
+    print("Starting server. Listening on port 50051.")
+    server.add_insecure_port("[::]:50051")
+    server.start()
+    try:
+        while True:
+            time.sleep(_ONE_DAY_IN_SECONDS)
+    except KeyboardInterrupt:
+        server.stop(0)
+
+if __name__ == "__main__":
+    serve()
+"#;
+
+const API_SERVICE_TEST_MAIN_PY: &str = r#"# Placeholder test_main.py for api-service
+# TODO: Add tests using pytest and httpx
+
+def test_placeholder():
+    assert True
+"#;
+
+const MODEL_SERVICE_TEST_SERVER_PY: &str = r#"# Placeholder test_server.py for model-service
+# TODO: Add tests using pytest and grpcio-testing
+
+def test_placeholder():
+    assert True
+"#;
 
 /// Handler for `ao init`.
 /// Creates the basic project directory structure and configuration file.
@@ -182,93 +254,96 @@ See `anops.proto` and the root README for more details.
 /// # Errors
 ///
 /// Returns an error if initialization fails (e.g., directory creation, file creation).
-pub fn run(name: String) -> Result<()> {
-    let project_path = Path::new(&name);
+pub fn run(path_str: String) -> Result<()> {
+    let project_path = PathBuf::from(path_str);
+    info!("Initializing new project at: {}", project_path.display());
 
-    info!("Initializing project '{}' at {:?}", name, project_path);
+    // Extract the directory name to use as the default project name
+    let project_name = project_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("anops-project"); // Default if path ends in .. or /
 
-    // Create base directory
-    fs::create_dir_all(project_path)
+    // Create root project directory
+    fs::create_dir_all(&project_path)
         .with_context(|| format!("Failed to create project directory: {}", project_path.display()))?;
-    info!("Created directory: {:?}", project_path);
-
-    // Create standard subdirectories
-    let subdirs = ["api-service", "model-service", "model-interface", "tests", "notebooks"];
-    for subdir in subdirs.iter() {
-        let dir_path = project_path.join(subdir);
-        fs::create_dir_all(&dir_path)
-            .with_context(|| format!("Failed to create subdirectory: {}", dir_path.display()))?;
-        info!("Created directory: {:?}", dir_path);
-    }
 
     // Create ao.toml configuration file
     let config_path = project_path.join("ao.toml");
-    let config_content = DEFAULT_AO_TOML_CONTENT.replace("{}", &name);
+    let config_content = format!(
+        r#"[project]
+name = "{}"
+
+[check]
+linters = []
+testers = [
+    # Example: Add commands to run tests
+    # "pytest api-service/tests",
+    # "pytest model-service/tests",
+]
+
+# [tasks]
+# Define custom tasks here, e.g.:
+# build = ["echo Building project..."]
+# deploy = ["echo Deploying project..."]
+"#,
+        project_name // Use the extracted project name
+    );
     fs::write(&config_path, config_content)
         .with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
-    info!("Created config file: {:?}", config_path);
+    info!("Created config file: {}", config_path.display());
+
+    // Create service directories
+    let services = ["api-service", "model-service", "model-interface"];
+    for service in services.iter() {
+        let service_path = project_path.join(service);
+        fs::create_dir_all(&service_path)
+            .with_context(|| format!("Failed to create directory: {}", service_path.display()))?;
+        info!("Created directory: {}", service_path.display());
+
+        // Add placeholder files/READMEs using the correct constant names
+        match *service {
+            "api-service" => {
+                fs::write(service_path.join("README.md"), DEFAULT_API_README)?;
+                fs::write(service_path.join("Dockerfile"), DEFAULT_API_DOCKERFILE)?;
+                fs::write(service_path.join("requirements.txt"), API_SERVICE_REQUIREMENTS)?;
+                fs::write(service_path.join("main.py"), API_SERVICE_MAIN_PY)?;
+                // Create tests directory and placeholder test file
+                let test_dir = service_path.join("tests");
+                fs::create_dir_all(&test_dir)?;
+                fs::write(test_dir.join("test_main.py"), API_SERVICE_TEST_MAIN_PY)?;
+            }
+            "model-service" => {
+                fs::write(service_path.join("README.md"), DEFAULT_MODEL_README)?;
+                fs::write(service_path.join("Dockerfile"), DEFAULT_MODEL_DOCKERFILE)?;
+                fs::write(service_path.join("requirements.txt"), MODEL_SERVICE_REQUIREMENTS)?;
+                fs::write(service_path.join("server.py"), MODEL_SERVICE_SERVER_PY)?;
+                // Create tests directory and placeholder test file
+                let test_dir = service_path.join("tests");
+                fs::create_dir_all(&test_dir)?;
+                fs::write(test_dir.join("test_server.py"), MODEL_SERVICE_TEST_SERVER_PY)?;
+            }
+            "model-interface" => {
+                fs::write(service_path.join("README.md"), DEFAULT_INTERFACE_README)?;
+                fs::write(service_path.join("anops.proto"), DEFAULT_ANOP_PROTO)?;
+            }
+            _ => {}
+        }
+    }
+
+    // Create root README.md
+    let readme_path = project_path.join("README.md");
+    fs::write(&readme_path, "# AnOps Project\n\nThis is the root README for the AnOps project.")
+        .with_context(|| format!("Failed to write README.md: {}", readme_path.display()))?;
+    info!("Created README.md: {}", readme_path.display());
 
     // Create .gitignore
     let gitignore_path = project_path.join(".gitignore");
     fs::write(&gitignore_path, DEFAULT_GITIGNORE_CONTENT)
-        .with_context(|| format!("Failed to write .gitignore file: {}", gitignore_path.display()))?;
-    info!("Created file: {:?}", gitignore_path);
+        .with_context(|| format!("Failed to write .gitignore: {}", gitignore_path.display()))?;
+    info!("Created .gitignore: {}", gitignore_path.display());
 
-    // Create Dockerfiles
-    let api_dockerfile_path = project_path.join("api-service/Dockerfile");
-    fs::write(&api_dockerfile_path, DEFAULT_API_DOCKERFILE)
-        .with_context(|| format!("Failed to write api-service Dockerfile: {}", api_dockerfile_path.display()))?;
-    info!("Created file: {:?}", api_dockerfile_path);
-
-    let model_dockerfile_path = project_path.join("model-service/Dockerfile");
-    fs::write(&model_dockerfile_path, DEFAULT_MODEL_DOCKERFILE)
-        .with_context(|| format!("Failed to write model-service Dockerfile: {}", model_dockerfile_path.display()))?;
-    info!("Created file: {:?}", model_dockerfile_path);
-
-    // Create docker-compose.yml
-    let compose_path = project_path.join("docker-compose.yml");
-    fs::write(&compose_path, DEFAULT_DOCKER_COMPOSE)
-        .with_context(|| format!("Failed to write docker-compose.yml: {}", compose_path.display()))?;
-    info!("Created file: {:?}", compose_path);
-
-    // Create model-interface proto file
-    let proto_path = project_path.join("model-interface/anops.proto");
-    fs::write(&proto_path, DEFAULT_ANOP_PROTO)
-        .with_context(|| format!("Failed to write anops.proto: {}", proto_path.display()))?;
-    info!("Created file: {:?}", proto_path);
-
-    // Create READMEs
-    let api_readme_path = project_path.join("api-service/README.md");
-     fs::write(&api_readme_path, DEFAULT_API_README)
-        .with_context(|| format!("Failed to write api-service README: {}", api_readme_path.display()))?;
-    info!("Created file: {:?}", api_readme_path);
-
-    let model_readme_path = project_path.join("model-service/README.md");
-     fs::write(&model_readme_path, DEFAULT_MODEL_README)
-        .with_context(|| format!("Failed to write model-service README: {}", model_readme_path.display()))?;
-    info!("Created file: {:?}", model_readme_path);
-
-    let interface_readme_path = project_path.join("model-interface/README.md");
-     fs::write(&interface_readme_path, DEFAULT_INTERFACE_README)
-        .with_context(|| format!("Failed to write model-interface README: {}", interface_readme_path.display()))?;
-    info!("Created file: {:?}", interface_readme_path);
-
-    // Create placeholder files in services (optional, but good practice)
-    // e.g., api-service/main.py, model-service/server.py
-    // fs::write(project_path.join("api-service/main.py"), "# FastAPI app placeholder")?;
-    // fs::write(project_path.join("model-service/server.py"), "# gRPC server placeholder")?;
-
-    info!("Project '{}' initialized successfully.", name);
-    info!("Next steps for '{}':", name);
-    info!("  - cd {}", name);
-    info!("  - Review READMEs in api-service, model-service, model-interface.");
-    info!("  - Implement your model in model-service.");
-    info!("  - Implement the API endpoints in api-service.");
-    info!("  - Generate gRPC code (see model-interface/README.md).");
-    info!("  - Configure dependencies (e.g., requirements.txt).");
-    info!("  - Run 'ao build' to build the service images.");
-    info!("  - Run 'docker-compose up' to start the services.");
-
+    info!("Project '{}' initialized successfully.", project_name);
     Ok(())
 }
 
@@ -282,33 +357,38 @@ mod tests {
     fn run_succeeds_and_creates_structure() {
         let tmp_dir = tempdir().unwrap();
         let project_name = "test_init_project";
-        // Run the init command relative to the temp dir
-        let result = run(tmp_dir.path().join(project_name).to_str().unwrap().to_string());
-        assert!(result.is_ok());
-
         let project_path = tmp_dir.path().join(project_name);
+        // Run the init command relative to the temp dir
+        let result = run(project_path.to_str().unwrap().to_string());
+        assert!(result.is_ok(), "init::run failed: {:?}", result.err());
 
         // Check if base directory exists
         assert!(project_path.exists());
         assert!(project_path.is_dir());
 
-        // Check if standard subdirectories exist
-        let subdirs = ["api-service", "model-service", "model-interface", "tests", "notebooks"];
+        // Check if standard subdirectories exist (as created by the current init::run)
+        let subdirs = ["api-service", "model-service", "model-interface", "api-service/tests", "model-service/tests"];
         for subdir in subdirs.iter() {
             let dir_path = project_path.join(subdir);
             assert!(dir_path.exists(), "Directory missing: {}", subdir);
             assert!(dir_path.is_dir(), "Path is not a directory: {}", subdir);
         }
 
-        // Check if core files exist
+        // Check if core files exist (as created by the current init::run)
         let core_files = [
             "ao.toml",
             ".gitignore",
-            "docker-compose.yml",
+            "README.md", // Root README
             "api-service/Dockerfile",
             "api-service/README.md",
+            "api-service/requirements.txt",
+            "api-service/main.py",
+            "api-service/tests/test_main.py",
             "model-service/Dockerfile",
             "model-service/README.md",
+            "model-service/requirements.txt",
+            "model-service/server.py",
+            "model-service/tests/test_server.py",
             "model-interface/anops.proto",
             "model-interface/README.md",
         ];
@@ -318,11 +398,10 @@ mod tests {
             assert!(file_path.is_file(), "Path is not a file: {}", file);
         }
 
-        // Check if config file has basic content (loosened: just check for [project] and project_name)
+        // Check if config file has the correct project name
         let config_path = project_path.join("ao.toml");
         let content = fs::read_to_string(config_path).unwrap();
-        assert!(content.contains("[project]"));
-        assert!(content.contains(project_name));
+        assert!(content.contains(&format!("name = \"{}\"", project_name)), "Project name mismatch in ao.toml");
 
         // Check .gitignore content (basic check)
         let gitignore_path = project_path.join(".gitignore");

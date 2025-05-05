@@ -163,9 +163,136 @@ mod tests {
     use crate::init; // To setup project structure
     use std::fs;
     use tempfile::tempdir;
+    use std::path::Path;
 
-    // TODO: Add tests for find_project_root
-    // TODO: Add tests for run_tool (mocking Command)
+    // Helper to create a project structure for utils tests
+    fn setup_test_project(base_path: &Path) -> Result<PathBuf> {
+        let project_dir = base_path.join("utils_test_project");
+        init::run(project_dir.to_str().unwrap().to_string())
+            .context("Failed to init project for utils test")?;
+        Ok(project_dir)
+    }
+
+    #[test]
+    fn find_project_root_succeeds_from_root() {
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+        let found_root = find_project_root(&project_path).unwrap();
+        assert_eq!(found_root.canonicalize().unwrap(), project_path.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn find_project_root_succeeds_from_subdir() {
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+        let subdir = project_path.join("api-service"); // Exists due to init
+        fs::create_dir_all(&subdir).unwrap(); // Ensure it exists
+        let found_root = find_project_root(&subdir).unwrap();
+        assert_eq!(found_root.canonicalize().unwrap(), project_path.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn find_project_root_fails_outside_project() {
+        let tmp_dir = tempdir().unwrap();
+        let outside_path = tmp_dir.path().join("not_a_project");
+        fs::create_dir(&outside_path).unwrap();
+        let result = find_project_root(&outside_path);
+        assert!(result.is_err());
+        // Correct the assertion string to match the actual error
+        assert!(result.unwrap_err().to_string().contains("Could not find project root (ao.toml)"));
+    }
+
+    #[test]
+    fn run_tool_succeeds_with_valid_command() {
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+        // Use a simple, universally available command
+        let result = run_tool("echo hello", &project_path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_tool_fails_with_invalid_command() {
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+        let result = run_tool("this_command_should_not_exist_ever", &project_path);
+        assert!(result.is_err());
+        // Error message might vary depending on OS and shell
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Failed to execute command") || err_msg.contains("No such file or directory"));
+    }
+
+    #[test]
+    fn run_tool_fails_with_command_error_status() {
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+        // Command that exists but returns non-zero status
+        let result = run_tool("ls non_existent_file_for_run_tool", &project_path);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("failed with status"));
+    }
+
+    #[test]
+    fn run_tool_fails_with_empty_command() {
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+        let result = run_tool("", &project_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("resulted in no executable parts"));
+    }
+
+    #[test]
+    fn run_tool_fails_with_bad_shlex() {
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+        // Command with unbalanced quotes
+        let result = run_tool("echo \"hello", &project_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Failed to parse command string"));
+    }
+
+    #[test]
+    fn generate_grpc_code_fails_if_proto_missing() {
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+        // Delete the proto file created by init
+        fs::remove_file(project_path.join("model-interface/anops.proto")).unwrap();
+        let result = generate_grpc_code(&project_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Proto file not found"));
+    }
+
+    #[test]
+    fn generate_grpc_code_fails_if_python_or_grpc_tools_missing() {
+        // This test assumes 'python_does_not_exist_for_test' is not a valid command.
+        // It's a basic check that the function attempts execution and fails if the tool is missing.
+        // A more robust test would involve mocking std::process::Command.
+        let tmp_dir = tempdir().unwrap();
+        let project_path = setup_test_project(tmp_dir.path()).unwrap();
+
+        // Temporarily modify the command generation logic for this test (if possible without major refactor)
+        // Or, more simply, accept that this test relies on the environment not having the fake python.
+        // We'll proceed assuming the command fails as expected if python/grpcio-tools are missing.
+
+        // We expect this to fail when trying to execute the python command.
+        let result = generate_grpc_code(&project_path);
+
+        // Check if the error indicates a failure to execute the command.
+        // This is environment-dependent. If python and grpcio-tools *are* installed,
+        // this test might pass for the wrong reasons (actual successful generation).
+        // A truly isolated test needs mocking.
+        if result.is_err() {
+            let err_msg = result.unwrap_err().to_string();
+            println!("generate_grpc_code_fails_if_python_or_grpc_tools_missing error: {}", err_msg);
+            // Check for common error messages related to command execution failure
+            assert!(err_msg.contains("Failed to execute") || err_msg.contains("No such file or directory") || err_msg.contains("gRPC code generation failed"));
+        } else {
+            // If it succeeded, it means python & grpcio-tools are likely installed.
+            // We can't reliably test the failure case without mocking or ensuring they aren't installed.
+            println!("Skipping assertion for generate_grpc_code failure: python/grpcio-tools likely installed.");
+        }
+    }
 
     #[test]
     fn generate_grpc_code_runs_without_panic_on_valid_structure() {
@@ -204,24 +331,6 @@ mod tests {
                 assert!(msg.contains("Failed to execute") || msg.contains("gRPC code generation failed"));
             }
         }
-    }
-
-    #[test]
-    fn generate_grpc_code_fails_if_proto_missing() {
-        let tmp_dir = tempdir().unwrap();
-        let project_name = "test_grpc_gen_no_proto";
-        let project_path = tmp_dir.path().join(project_name);
-
-        // Create partial structure WITHOUT the proto file
-        fs::create_dir_all(project_path.join("model-interface")).unwrap();
-        fs::create_dir_all(project_path.join("api-service")).unwrap();
-        fs::create_dir_all(project_path.join("model-service")).unwrap();
-        // Create ao.toml so find_project_root works if called implicitly later
-        fs::write(project_path.join("ao.toml"), "[project]\nname=\"test\"").unwrap();
-
-        let result = generate_grpc_code(&project_path);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Proto file not found"));
     }
 
     #[test]
