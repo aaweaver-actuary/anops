@@ -81,6 +81,7 @@ model-service/
   requirements.txt
   server.py
 .repomixignore
+ao.toml
 docker-compose.yml
 README.md
 repomix.config.json
@@ -236,8 +237,12 @@ println!("Found directory: {:?}", dir_path);
 // Check for specific required files within service directories
 ⋮----
 ("api-service", "requirements.txt"), // Good practice to check
+("api-service", "anops_pb2.py"), // Check for generated gRPC file
+("api-service", "anops_pb2_grpc.py"), // Check for generated gRPC file
 ⋮----
 ("model-service", "requirements.txt"), // Good practice to check
+("model-service", "anops_pb2.py"), // Check for generated gRPC file
+("model-service", "anops_pb2_grpc.py"), // Check for generated gRPC file
 ⋮----
 for (dir_name, file_name) in required_files.iter() {
 let file_path = project_path.join(dir_name).join(file_name);
@@ -364,18 +369,28 @@ fn run_fails_if_structure_invalid_even_if_found() {
 fs::remove_dir_all(project_path.join("api-service")).unwrap();
 let result_dir = run(project_path.to_str().unwrap().to_string());
 assert!(result_dir.is_err());
-assert!(result_dir.unwrap_err().to_string().contains("Required directory"));
-assert!(result_dir.unwrap_err().to_string().contains("api-service' not found"));
+let err_msg_dir = result_dir.unwrap_err().to_string();
+assert!(err_msg_dir.contains("Required directory"));
+assert!(err_msg_dir.contains("api-service' not found"));
 ⋮----
 // Recreate the project for the next check
 let project_path = setup_valid_project(tmp_dir.path()).unwrap(); // Re-init
 ⋮----
-// Test removing a required file within a service directory
+// Test removing a required file within a service directory (proto)
 fs::remove_file(project_path.join("model-interface/anops.proto")).unwrap();
-let result_file = run(project_path.to_str().unwrap().to_string());
-assert!(result_file.is_err());
-assert!(result_file.unwrap_err().to_string().contains("Required file"));
-assert!(result_file.unwrap_err().to_string().contains("anops.proto' not found in directory 'model-interface'"));
+let result_file_proto = run(project_path.to_str().unwrap().to_string());
+assert!(result_file_proto.is_err());
+let err_msg_proto = result_file_proto.unwrap_err().to_string();
+assert!(err_msg_proto.contains("Required file"));
+assert!(err_msg_proto.contains("anops.proto' not found in directory 'model-interface'"));
+⋮----
+// Test removing a generated gRPC file
+fs::remove_file(project_path.join("api-service/anops_pb2.py")).unwrap();
+let result_file_grpc = run(project_path.to_str().unwrap().to_string());
+assert!(result_file_grpc.is_err());
+let err_msg_grpc = result_file_grpc.unwrap_err().to_string();
+assert!(err_msg_grpc.contains("Required file"));
+assert!(err_msg_grpc.contains("anops_pb2.py' not found in directory 'api-service'"));
 </file>
 
 <file path="ao-cli/src/config.rs">
@@ -392,7 +407,7 @@ pub struct Config {
 #[serde(default)] // Use default HashMap if missing
 ⋮----
 /// Represents the [project] table in ao.toml
-⋮----
+#[derive(Deserialize, Debug, PartialEq, Default)] // Added Default
 pub struct ProjectConfig {
 ⋮----
 /// Represents the [check] table in ao.toml
@@ -597,7 +612,8 @@ println!("Created file: {:?}", interface_readme_path);
 ⋮----
 // Create placeholder files in services (optional, but good practice)
 // e.g., api-service/main.py, model-service/server.py
-// fs::write(project_path.join("api-service/main.py"), "# FastAPI app placeholder
+// fs::write(project_path.join("api-service/main.py"), "# FastAPI app placeholder")?;
+// fs::write(project_path.join("model-service/server.py"), "# gRPC server placeholder")?;
 ⋮----
 println!("Project '{}' initialized successfully.", name);
 println!("Next steps:");
@@ -707,7 +723,11 @@ enum Commands {
 ⋮----
 /// Path within the project directory (optional, defaults to current dir)
 ⋮----
+/// Build Docker images for the project services
+⋮----
 fn main() -> Result<()> {
+⋮----
+Commands::Build { path } => build::run(path)?, // Add handler for Build
 ⋮----
 Ok(())
 </file>
@@ -719,11 +739,7 @@ use std::env;
 ⋮----
 use crate::utils::{find_project_root, run_tool}; // Import from utils
 ⋮----
-// --- Helper Functions (Consider moving to a shared utils module later) --- //
-⋮----
-// ... (find_project_root function removed) ...
-⋮----
-// ... (run_tool function removed) ...
+// --- Helper Functions removed, now in utils.rs --- //
 ⋮----
 // --- Main `run` function --- //
 ⋮----
@@ -743,7 +759,7 @@ pub fn run(task_name: String, path_str: String) -> Result<()> {
 ⋮----
 println!(
 ⋮----
-// Find project root
+// Find project root using the utility function
 let project_path = find_project_root(start_path)
 .with_context(|| format!("Failed to find project root starting from '{}'", start_path.display()))?;
 println!("Found project root at '{}'", project_path.display());
@@ -760,6 +776,7 @@ println!("--- Running task '{}' ---", task_name);
 if commands.is_empty() {
 println!("Task '{}' has no commands defined.", task_name);
 ⋮----
+// Use the utility function to run the command
 run_tool(command_str, &project_path).with_context(|| {
 format!("Command '{}' in task '{}' failed", command_str, task_name)
 ⋮----
@@ -854,17 +871,32 @@ assert!(project_path.join("build_output_subdir").is_dir());
 /// Searches upwards from the starting path for a file named `ao.toml`.
 /// Returns the path to the directory containing `ao.toml` if found.
 pub fn find_project_root(start_path: &Path) -> Result<PathBuf> {
+println!("find_project_root: Starting search from '{}'", start_path.display()); // Added log
+// Canonicalize the starting path to resolve symlinks and relative components
 ⋮----
 .canonicalize()
 .with_context(|| format!("Failed to canonicalize path: {}", start_path.display()))?;
+println!("find_project_root: Canonical path is '{}'", current_path.display()); // Added log
 ⋮----
 let config_path = current_path.join("ao.toml");
+println!("find_project_root: Checking for config at '{}'", config_path.display()); // Added log
 if config_path.exists() && config_path.is_file() {
+println!("find_project_root: Found config at '{}'", config_path.display()); // Added log
 return Ok(current_path);
 ⋮----
+// Move up to the parent directory
 if let Some(parent) = current_path.parent() {
+// Check if we are already at the root to prevent infinite loop
+⋮----
+println!("find_project_root: Reached filesystem root, config not found."); // Added log
+⋮----
+println!("find_project_root: Moving up to parent '{}'", parent.display()); // Added log
 current_path = parent.to_path_buf();
 ⋮----
+// Should not happen if parent == current_path check works, but as a safeguard
+println!("find_project_root: No parent found, config not found."); // Added log
+⋮----
+// If loop finishes without returning, the file was not found
 bail!(
 ⋮----
 /// Executes an external tool/command within the project directory.
@@ -1285,18 +1317,37 @@ grpcio-tools>=1.50.0,<2.0.0
 </file>
 
 <file path="model-service/server.py">
+import logging  # Added logging
+⋮----
 # Import the generated classes
+⋮----
+# Configure basic logging
+⋮----
+# --- Simple Model Logic --- #
+def run_model(input_str: str) -> str
+⋮----
+"""Placeholder for actual model execution."""
+⋮----
+# Example: Reverse the input string
+output_str = input_str[::-1]
+⋮----
+# ------------------------ #
 ⋮----
 # Implementation of the AnOps service
 class AnOpsServicer(anops_pb2_grpc.AnOpsServicer)
 ⋮----
+"""Provides methods that implement functionality of the AnOps server."""
+⋮----
 def Predict(self, request, context)
 ⋮----
-# --- Placeholder Logic ---
-# In a real scenario, this is where you would load your model
-# and perform the prediction based on request.input_data.
-output = f"Processed: {request.input_data}"
-# -----------------------
+"""Handles the Predict RPC call."""
+⋮----
+# --- Call the model logic --- #
+⋮----
+output = run_model(request.input_data)
+⋮----
+return anops_pb2.PredictResponse()  # Return empty response on error
+# -------------------------- #
 ⋮----
 # Function to start the server
 def serve()
@@ -1325,6 +1376,19 @@ ACTIONPLAN.md
 tmp/
 Cargo.lock
 target/
+</file>
+
+<file path="ao.toml">
+[project]
+name = "anops-dev"
+
+# Optional sections for check and tasks can be added later
+# [check]
+# linters = []
+# testers = []
+#
+# [tasks]
+# my-task = ["echo hello"]
 </file>
 
 <file path="docker-compose.yml">

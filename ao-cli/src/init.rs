@@ -265,7 +265,8 @@ pub fn run(name: String) -> Result<()> {
     println!("  - Implement the API endpoints in api-service.");
     println!("  - Generate gRPC code (see model-interface/README.md).");
     println!("  - Configure dependencies (e.g., requirements.txt).");
-    println!("  - Run 'docker-compose up --build' to build and start services.");
+    println!("  - Run 'ao build' to build the service images.");
+    println!("  - Run 'docker-compose up' to start the services.");
 
     Ok(())
 }

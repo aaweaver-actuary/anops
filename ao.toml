@@ -1,10 +1,13 @@
 [project]
 name = "anops-dev"
 
-# Optional sections for check and tasks can be added later
-# [check]
-# linters = []
-# testers = []
-#
+[check]
+linters = []
+testers = [
+    "pytest --cov=server.py --cov-report=term --maxfail=1 --disable-warnings -C model-service/tests",
+    "pytest --cov=main.py --cov-report=term --maxfail=1 --disable-warnings -C api-service/tests",
+    "pytest --maxfail=1 --disable-warnings -C tests"
+]
+
 # [tasks]
 # my-task = ["echo hello"]

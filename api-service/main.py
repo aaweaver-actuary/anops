@@ -2,6 +2,7 @@ import os
 import grpc
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+import logging
 
 # Import the generated gRPC classes
 # Assumes the generated files (_pb2.py, _pb2_grpc.py) are accessible.
@@ -9,6 +10,12 @@ from pydantic import BaseModel
 # For simplicity, we'll assume they are in the same directory or PYTHONPATH.
 import anops_pb2
 import anops_pb2_grpc
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -28,15 +35,13 @@ class PredictResponseData(BaseModel):
 
 @app.post("/predict", response_model=PredictResponseData)
 async def predict(request_data: PredictRequestData):
-    print(f"API Service: Received request: {request_data.input_data}")
+    logger.info(f"Received /predict request: {request_data.input_data}")
     try:
         # Establish insecure gRPC channel to the model service
         # In production, use secure channels (grpc.secure_channel)
         async with grpc.aio.insecure_channel(MODEL_SERVICE_URL) as channel:
             stub = anops_pb2_grpc.AnOpsStub(channel)
-            print(
-                f"API Service: Sending request to model service at {MODEL_SERVICE_URL}"
-            )
+            logger.info(f"Sending request to model service at {MODEL_SERVICE_URL}")
 
             # Create the gRPC request message
             grpc_request = anops_pb2.PredictRequest(input_data=request_data.input_data)
@@ -44,24 +49,24 @@ async def predict(request_data: PredictRequestData):
             # Make the asynchronous gRPC call
             grpc_response = await stub.Predict(grpc_request)
 
-            print(
-                f"API Service: Received response from model service: {grpc_response.output_data}"
+            logger.info(
+                f"Received response from model service: {grpc_response.output_data}"
             )
 
             # Return the response data
             return PredictResponseData(output_data=grpc_response.output_data)
 
     except grpc.aio.AioRpcError as e:
-        print(f"API Service: Error connecting to or calling model service: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Could not connect to or call model service: {e.details()}",
-        )
+        logger.error(f"gRPC error: {e}", exc_info=True)
+        if e.code() == grpc.StatusCode.INVALID_ARGUMENT:
+            raise HTTPException(status_code=400, detail=f"Invalid input: {e.details()}")
+        elif e.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(status_code=503, detail="Model service unavailable.")
+        else:
+            raise HTTPException(status_code=500, detail=f"gRPC error: {e.details()}")
     except Exception as e:
-        print(f"API Service: An unexpected error occurred: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"An internal server error occurred: {str(e)}"
-        )
+        logger.error(f"Unexpected error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @app.get("/health")

@@ -1,2 +1,3 @@
 grpcio>=1.50.0,<2.0.0
 grpcio-tools>=1.50.0,<2.0.0
+# Add other model-specific dependencies here (e.g., scikit-learn, pandas)

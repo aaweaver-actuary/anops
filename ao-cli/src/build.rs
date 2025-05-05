@@ -2,11 +2,11 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 use crate::config;
-use crate::utils::{find_project_root, run_tool};
+use crate::utils::{find_project_root, run_tool, generate_grpc_code}; // Added generate_grpc_code
 use crate::check; // Import the check module to run pre-build checks
 
 /// Handler for `ao build`.
-/// Finds the project root, loads config, runs checks, and builds Docker images.
+/// Finds the project root, loads config, generates gRPC code, runs checks, and builds Docker images.
 ///
 /// # Arguments
 ///
@@ -15,7 +15,7 @@ use crate::check; // Import the check module to run pre-build checks
 /// # Errors
 ///
 /// Returns an error if the project root is not found, config loading fails,
-/// checks fail, or any Docker build command fails.
+/// gRPC generation fails, checks fail, or any Docker build command fails.
 pub fn run(path_str: String) -> Result<()> {
     let start_path = Path::new(&path_str);
     println!("Starting build from '{}'", start_path.display());
@@ -30,6 +30,12 @@ pub fn run(path_str: String) -> Result<()> {
         .context("Failed to load project configuration")?;
     let project_name = &config.project.name;
     println!("Building project: {}", project_name);
+
+    // --- Generate gRPC Code --- //
+    generate_grpc_code(&project_path)
+        .context("Failed to generate gRPC code")?;
+    // --- End Generate gRPC Code --- //
+
 
     // --- Pre-build Checks --- //
     println!("--- Running Pre-Build Checks ---");
@@ -84,8 +90,12 @@ pub fn run(path_str: String) -> Result<()> {
     Ok(())
 }
 
-// TODO: Add tests for build::run
-// - Test success case (mocks docker build or requires docker)
-// - Test failure if check::run fails
-// - Test failure if docker build fails
-// - Test finding root from subdir
+#[cfg(test)]
+mod tests {
+    // TODO: Add tests for build::run
+    // - Test success case (mocks docker build, grpc generation, check::run)
+    // - Test failure if grpc generation fails
+    // - Test failure if check::run fails
+    // - Test failure if docker build fails
+    // - Test finding root from subdir
+}

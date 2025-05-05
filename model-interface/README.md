@@ -12,14 +12,6 @@ See `anops.proto` for the formal service and message definitions.
 
 ## Generating Code Stubs
 
-You will need the `protoc` compiler and the appropriate language-specific plugins (e.g., `grpcio-tools` for Python) to generate client and server code stubs from the `.proto` file.
+The necessary Python client and server code stubs (`*_pb2.py`, `*_pb2_grpc.py`, `*_pb2.pyi`) are **automatically generated** when you run the `ao build` command.
 
-**Example (Python):**
-
-```bash
-pip install grpcio grpcio-tools
-python -m grpc_tools.protoc -I. --python_out=../model-service --pyi_out=../model-service --grpc_python_out=../model-service anops.proto
-# Adjust output paths as needed
-```
-
-This generated code will be used by the `api-service` (client stubs) and `model-service` (server base classes and stubs).
+The generated files are placed into both the `api-service` and `model-service` directories. You do not need to run `protoc` manually. Ensure you have `grpcio-tools` installed in the Python environment where you run `ao build` (or ensure `python -m grpc_tools.protoc` is runnable).

@@ -1,6 +1,9 @@
 # Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
+# Create a non-root user
+RUN useradd -m appuser
+
 # Set the working directory in the container
 WORKDIR /app
 
@@ -8,9 +11,14 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the gRPC generated code and the service implementation
-# Assumes generated code (_pb2.py, _pb2_grpc.py) is in the build context
-COPY . .
+# Copy only necessary files
+COPY server.py .
+COPY anops_pb2.py .
+COPY anops_pb2_grpc.py .
+COPY anops_pb2.pyi .
+
+# Switch to non-root user
+USER appuser
 
 # Expose the port the gRPC server listens on
 EXPOSE 50051
