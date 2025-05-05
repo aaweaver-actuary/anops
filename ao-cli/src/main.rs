@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use ao::{init, check, run}; // Added run
+use ao::{init, check, run, build}; // Added build
 
 /// Top-level CLI parser
 #[derive(Parser)]
@@ -33,6 +33,12 @@ enum Commands {
         #[arg(default_value = ".")]
         path: String,
     },
+    /// Build Docker images for the project services
+    Build {
+        /// Path within the project directory (optional, defaults to current dir)
+        #[arg(default_value = ".")]
+        path: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -42,6 +48,7 @@ fn main() -> Result<()> {
         Commands::Init { name } => init::run(name)?,
         Commands::Check { path } => check::run(path)?,
         Commands::Run { task_name, path } => run::run(task_name, path)?,
+        Commands::Build { path } => build::run(path)?, // Add handler for Build
     }
 
     Ok(())

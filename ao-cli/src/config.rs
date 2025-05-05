@@ -15,7 +15,7 @@ pub struct Config {
 }
 
 /// Represents the [project] table in ao.toml
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Default)] // Added Default
 pub struct ProjectConfig {
     pub name: String,
 }

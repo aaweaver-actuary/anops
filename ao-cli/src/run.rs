@@ -1,63 +1,12 @@
+use crate::config;
 use anyhow::{bail, Context, Result};
+use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use crate::config;
 
-// --- Helper Functions (Consider moving to a shared utils module later) --- //
+use crate::utils::{find_project_root, run_tool}; // Import from utils
 
-/// Searches upwards from the starting path for a file named `ao.toml`.
-/// Returns the path to the directory containing `ao.toml` if found.
-// TODO: Move this to a shared location (e.g., `src/project.rs` or `src/utils.rs`)
-fn find_project_root(start_path: &Path) -> Result<PathBuf> {
-    let mut current_path = start_path.canonicalize()
-        .with_context(|| format!("Failed to canonicalize path: {}", start_path.display()))?;
-
-    loop {
-        let config_path = current_path.join("ao.toml");
-        if config_path.exists() && config_path.is_file() {
-            return Ok(current_path);
-        }
-
-        if let Some(parent) = current_path.parent() {
-            current_path = parent.to_path_buf();
-        } else {
-            bail!("Could not find project root (ao.toml) starting from {}", start_path.display());
-        }
-    }
-}
-
-/// Executes an external tool/command within the project directory.
-// TODO: Move this to a shared location (e.g., `src/cmd.rs` or `src/utils.rs`)
-fn run_tool(command_str: &str, project_root: &Path) -> Result<()> {
-    println!("Running tool: '{}' in {}", command_str, project_root.display());
-
-    if command_str.is_empty() {
-        bail!("Cannot run an empty command string.");
-    }
-
-    let parts: Vec<&str> = command_str.split_whitespace().collect();
-    if parts.is_empty() {
-        bail!("Command string '{}' resulted in no executable parts.", command_str);
-    }
-    let executable = parts[0];
-    let args = &parts[1..];
-
-    let mut command = Command::new(executable);
-    command.args(args);
-    command.current_dir(project_root);
-    command.stdout(Stdio::inherit());
-    command.stderr(Stdio::inherit());
-
-    let status = command.status()
-        .with_context(|| format!("Failed to execute command: '{}'", command_str))?;
-
-    if status.success() {
-        println!("Tool '{}' finished successfully.", command_str);
-        Ok(())
-    } else {
-        bail!("Tool '{}' failed with status: {}", command_str, status);
-    }
-}
+// --- Helper Functions removed, now in utils.rs --- //
 
 // --- Main `run` function --- //
 
@@ -75,8 +24,13 @@ fn run_tool(command_str: &str, project_root: &Path) -> Result<()> {
 /// the task is not found, or any command within the task fails.
 pub fn run(task_name: String, path_str: String) -> Result<()> {
     let start_path = Path::new(&path_str);
-    println!("Attempting to run task '{}' starting from '{}'", task_name, start_path.display());
+    println!(
+        "Running task '{}' starting from '{}'",
+        task_name,
+        start_path.display()
+    );
 
+    // Find project root using the utility function
     let project_path = find_project_root(start_path)
         .with_context(|| format!("Failed to find project root starting from '{}'", start_path.display()))?;
     println!("Found project root at '{}'", project_path.display());
@@ -94,8 +48,10 @@ pub fn run(task_name: String, path_str: String) -> Result<()> {
                 println!("Task '{}' has no commands defined.", task_name);
             } else {
                 for command_str in commands {
-                    run_tool(command_str, &project_path)
-                        .with_context(|| format!("Command '{}' in task '{}' failed", command_str, task_name))?;
+                    // Use the utility function to run the command
+                    run_tool(command_str, &project_path).with_context(|| {
+                        format!("Command '{}' in task '{}' failed", command_str, task_name)
+                    })?;
                 }
             }
             println!("--- Task '{}' finished successfully ---", task_name);
@@ -128,14 +84,17 @@ mod tests {
     #[test]
     fn run_succeeds_with_valid_task() {
         let tmp_dir = tempdir().unwrap();
-        let config_content = r#"
-[project]
-name = "run-test"
+        let project_name = "test_run_project"; // Name used inside config content
+        let config_content = format!(
+            r#"[project]
+name = "{}"
 
 [tasks]
-build = ["echo building...", "mkdir build_output"]
-"#;
-        let project_path = setup_project_with_config(tmp_dir.path(), config_content).unwrap();
+build = ["mkdir build_output"] # Simple command
+"#,
+            project_name
+        );
+        let project_path = setup_project_with_config(tmp_dir.path(), &config_content).unwrap();
 
         let result = run("build".to_string(), project_path.to_str().unwrap().to_string());
 
@@ -148,14 +107,17 @@ build = ["echo building...", "mkdir build_output"]
     #[test]
     fn run_succeeds_with_empty_task() {
         let tmp_dir = tempdir().unwrap();
-        let config_content = r#"
-[project]
-name = "empty-task-test"
+        let project_name = "test_run_project";
+        let config_content = format!(
+            r#"[project]
+name = "{}"
 
 [tasks]
-empty = []
-"#;
-        let project_path = setup_project_with_config(tmp_dir.path(), config_content).unwrap();
+empty = [] # Empty command list
+"#,
+            project_name
+        );
+        let project_path = setup_project_with_config(tmp_dir.path(), &config_content).unwrap();
 
         let result = run("empty".to_string(), project_path.to_str().unwrap().to_string());
 
@@ -166,32 +128,42 @@ empty = []
     #[test]
     fn run_fails_if_task_not_found() {
         let tmp_dir = tempdir().unwrap();
-        let config_content = r#"
-[project]
-name = "no-such-task-test"
+        let project_name = "test_run_project";
+        let config_content = format!(
+            r#"[project]
+name = "{}"
 
 [tasks]
-build = ["echo build"]
-"#;
-        let project_path = setup_project_with_config(tmp_dir.path(), config_content).unwrap();
+build = ["echo hello"]
+"#,
+            project_name
+        );
+        let project_path = setup_project_with_config(tmp_dir.path(), &config_content).unwrap();
 
         let result = run("deploy".to_string(), project_path.to_str().unwrap().to_string()); // Task 'deploy' doesn't exist
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Task 'deploy' not found in ao.toml"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Task 'deploy' not found in ao.toml"));
     }
 
     #[test]
     fn run_fails_if_command_in_task_fails() {
         let tmp_dir = tempdir().unwrap();
-        let config_content = r#"
-[project]
-name = "failing-task-test"
+        let project_name = "test_run_project";
+        // Use a command that will fail (ls on a non-existent file)
+        let config_content = format!(
+            r#"[project]
+name = "{}"
 
 [tasks]
-build = ["echo starting...", "ls non_existent_file_in_task", "echo finished?"]
-"#;
-        let project_path = setup_project_with_config(tmp_dir.path(), config_content).unwrap();
+build = ["ls non_existent_file_in_task"]
+"#,
+            project_name
+        );
+        let project_path = setup_project_with_config(tmp_dir.path(), &config_content).unwrap();
 
         let result = run("build".to_string(), project_path.to_str().unwrap().to_string());
 
@@ -210,10 +182,16 @@ build = ["echo starting...", "ls non_existent_file_in_task", "echo finished?"]
         let non_project_path = tmp_dir.path().join("not_a_project");
         fs::create_dir(&non_project_path).unwrap();
 
-        let result = run("build".to_string(), non_project_path.to_str().unwrap().to_string());
+        let result = run(
+            "build".to_string(),
+            non_project_path.to_str().unwrap().to_string(),
+        );
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Could not find project root"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Could not find project root"));
     }
 
     #[test]
@@ -227,20 +205,26 @@ build = ["echo starting...", "ls non_existent_file_in_task", "echo finished?"]
         let result = run("build".to_string(), project_path.to_str().unwrap().to_string());
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to parse TOML config file"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse TOML config file"));
     }
 
     #[test]
     fn run_works_when_called_from_subdir() {
-         let tmp_dir = tempdir().unwrap();
-        let config_content = r#"
-[project]
-name = "run-from-subdir-test"
+        let tmp_dir = tempdir().unwrap();
+        let project_name = "test_run_project";
+        let config_content = format!(
+            r#"[project]
+name = "{}"
 
 [tasks]
-build = ["echo building...", "mkdir ../build_output_subdir"] # Create output relative to root
-"#;
-        let project_path = setup_project_with_config(tmp_dir.path(), config_content).unwrap();
+build = ["mkdir build_output_subdir"]
+"#,
+            project_name
+        );
+        let project_path = setup_project_with_config(tmp_dir.path(), &config_content).unwrap();
         let models_path = project_path.join("models"); // Subdir created by init
 
         // Run from the 'models' subdirectory

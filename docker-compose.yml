@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  api-service:
+    build: ./api-service
+    ports:
+      - "8000:8000" # Expose API port
+    environment:
+      # Example: Point API to the gRPC service
+      MODEL_SERVICE_URL: model-service:50051
+    depends_on:
+      - model-service
+    networks:
+      - anops-net
+
+  model-service:
+    build: ./model-service
+    ports:
+      - "50051:50051" # Expose gRPC port (optional for external access, needed for API)
+    networks:
+      - anops-net
+
+networks:
+  anops-net:
+    driver: bridge

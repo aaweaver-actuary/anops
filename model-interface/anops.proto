@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package anops;
+
+// The AnOps service definition.
+service AnOps {
+  // Sends input data for prediction.
+  rpc Predict (PredictRequest) returns (PredictResponse) {}
+}
+
+// The request message containing the input data.
+// For simplicity, starting with a generic string input.
+// This will likely evolve to support structured data (e.g., JSON string, bytes, etc.).
+message PredictRequest {
+  string input_data = 1;
+}
+
+// The response message containing the prediction result.
+// Similarly generic for now.
+message PredictResponse {
+  string output_data = 1;
+}

@@ -1,0 +1,10 @@
+[project]
+name = "anops-dev"
+
+# Optional sections for check and tasks can be added later
+# [check]
+# linters = []
+# testers = []
+#
+# [tasks]
+# my-task = ["echo hello"]
