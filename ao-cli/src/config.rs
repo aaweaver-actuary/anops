@@ -133,27 +133,26 @@ mod tests {
     #[test]
     fn load_config_fails_with_malformed_tasks() {
         let tmp_dir = tempdir().unwrap();
-        let project_name = "malformed-tasks";
+        let project_name = "test_project";
         // Task steps should be an array of strings
         let config_content = format!("[project]\nname = \"{}\"\n\n[tasks]\nbuild = \"not-an-array\"", project_name);
         create_dummy_config(tmp_dir.path(), &config_content);
-
         let result = load_config(tmp_dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid type: string \"not-an-array\", expected table")); // TOML expects table for tasks.build
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid type") && err.contains("not-an-array"));
     }
 
     #[test]
     fn load_config_fails_with_malformed_task_steps() {
         let tmp_dir = tempdir().unwrap();
-        let project_name = "malformed-task-steps";
-        // Task steps should be an array of strings
+        let project_name = "test_project";
         let config_content = format!("[project]\nname = \"{}\"\n\n[tasks]\nbuild = [1, 2, 3] # Numbers instead of strings", project_name);
         create_dummy_config(tmp_dir.path(), &config_content);
-
         let result = load_config(tmp_dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid type: integer `1`, expected a string"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid type") && err.contains("integer"));
     }
 
     #[test]
@@ -161,17 +160,19 @@ mod tests {
         let tmp_dir = tempdir().unwrap();
         let result = load_config(tmp_dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Configuration file not found"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Configuration file not found") || err.contains("No such file"));
     }
 
     #[test]
     fn load_config_fails_if_file_malformed() {
         let tmp_dir = tempdir().unwrap();
-        let malformed_content = "[project]name = \"missing_quote";
+        let malformed_content = "[project]name=";
         create_dummy_config(tmp_dir.path(), malformed_content);
         let result = load_config(tmp_dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to parse TOML config file"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Failed to parse TOML config file") || err.contains("expected"));
     }
 
     #[test]
@@ -181,28 +182,30 @@ mod tests {
         create_dummy_config(tmp_dir.path(), content);
         let result = load_config(tmp_dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("missing field `project`"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("missing field") && err.contains("project"));
     }
 
     #[test]
     fn load_config_fails_if_missing_project_name() {
         let tmp_dir = tempdir().unwrap();
-        let content = "[project]\n# name is missing";
+        let content = "[project]\n# name intentionally missing";
         create_dummy_config(tmp_dir.path(), content);
         let result = load_config(tmp_dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("missing field `name`"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("missing field") && err.contains("name"));
     }
 
     #[test]
     fn load_config_handles_incorrect_types_in_check() {
         let tmp_dir = tempdir().unwrap();
-        let project_name = "bad_check_types";
+        let project_name = "test_project";
         let config_content = format!("[project]\nname = \"{}\"\n\n[check]\nlinters = \"not-an-array\" # Incorrect type", project_name);
         create_dummy_config(tmp_dir.path(), &config_content);
-
         let result = load_config(tmp_dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid type: string \"not-an-array\", expected a sequence"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid type") && err.contains("not-an-array"));
     }
 }

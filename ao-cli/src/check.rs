@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{bail, Context, Result};
+use tracing::{info, warn, error};
 
 use crate::config; // Import the config module
 use crate::utils::{find_project_root, run_tool}; // Import from utils
@@ -19,20 +20,20 @@ use crate::utils::{find_project_root, run_tool}; // Import from utils
 /// Returns an error if any step (root finding, config load, structure check, tool execution) fails.
 pub fn run(path_str: String) -> Result<()> {
     let start_path = Path::new(&path_str);
-    println!("Starting check from '{}'", start_path.display());
+    info!("Starting check from {}", start_path.display());
 
     // Find project root
     let project_path = find_project_root(start_path)
         .with_context(|| format!("Failed to find project root starting from '{}'", start_path.display()))?;
-    println!("Found project root at '{}'", project_path.display());
+    info!("Found project root at {}", project_path.display());
 
     // Load configuration
     let config = config::load_config(&project_path)
         .context("Failed to load project configuration")?;
-    println!("Project name from config: {}", config.project.name);
+    info!("Project name from config: {}", config.project.name);
 
     // --- Structure Checks --- //
-    println!("Running structure checks in '{}'", project_path.display());
+    info!("Running structure checks in '{}'", project_path.display());
 
     // Check for required directories relative to the found project root
     // TODO: Enhance check to include service directories // Updated below
@@ -56,7 +57,7 @@ pub fn run(path_str: String) -> Result<()> {
         if !dir_path.is_dir() {
             bail!("Path '{}' is not a directory.", dir_path.display());
         }
-        println!("Found directory: {:?}", dir_path);
+        info!("Found directory: {:?}", dir_path);
     }
 
     // Check for specific required files within service directories
@@ -83,39 +84,39 @@ pub fn run(path_str: String) -> Result<()> {
         if !file_path.is_file() {
             bail!("Path '{}' is not a file.", file_path.display());
         }
-        println!("Found file: {:?}", file_path);
+        info!("Found file: {:?}", file_path);
     }
 
     // Config file presence is already checked by find_project_root and load_config
-    println!("Found config file: {:?}", project_path.join("ao.toml"));
+    info!("Found config file: {:?}", project_path.join("ao.toml"));
 
     // --- Tool Execution --- //
 
     // Run configured linters
-    if !config.check.linters.is_empty() {
-        println!("--- Running Linters ---");
+    if (!config.check.linters.is_empty()) {
+        info!("--- Running Linters ---");
         for linter_cmd in &config.check.linters {
             run_tool(linter_cmd, &project_path)
                 .with_context(|| format!("Linter command '{}' failed", linter_cmd))?;
         }
-        println!("--- Linters Finished ---");
+        info!("--- Linters Finished ---");
     } else {
-        println!("No linters configured.");
+        info!("No linters configured.");
     }
 
     // Run configured testers
-    if !config.check.testers.is_empty() {
-        println!("--- Running Testers ---");
+    if (!config.check.testers.is_empty()) {
+        info!("--- Running Testers ---");
         for tester_cmd in &config.check.testers {
             run_tool(tester_cmd, &project_path)
                 .with_context(|| format!("Tester command '{}' failed", tester_cmd))?;
         }
-        println!("--- Testers Finished ---");
+        info!("--- Testers Finished ---");
     } else {
-        println!("No testers configured.");
+        info!("No testers configured.");
     }
 
-    println!("All checks passed successfully!");
+    info!("All checks passed successfully!");
     Ok(())
 }
 
@@ -154,12 +155,16 @@ mod tests {
         let models_path = project_path.join("models");
 
         // Search from root
-        let found_root = crate::utils::find_project_root(&project_path).unwrap(); // Use utils::find_project_root
-        assert_eq!(found_root, project_path);
+        let found_root = crate::utils::find_project_root(&project_path).unwrap();
+        // Compare canonicalized paths for robustness
+        let expected = project_path.canonicalize().unwrap();
+        let actual = found_root.canonicalize().unwrap();
+        assert_eq!(expected, actual);
 
         // Search from subdir
-        let found_root_from_subdir = crate::utils::find_project_root(&models_path).unwrap(); // Use utils::find_project_root
-        assert_eq!(found_root_from_subdir, project_path);
+        let found_root_from_subdir = crate::utils::find_project_root(&models_path).unwrap();
+        let actual_subdir = found_root_from_subdir.canonicalize().unwrap();
+        assert_eq!(expected, actual_subdir);
     }
 
     #[test]
@@ -210,9 +215,8 @@ mod tests {
         let project_path = tmp_dir.path().join("non_existent_project");
         let result = run(project_path.to_str().unwrap().to_string());
         assert!(result.is_err());
-        // Error could be canonicalize failure or root finding failure
-        assert!(result.unwrap_err().to_string().contains("Failed to find project root") || result.unwrap_err().to_string().contains("Failed to canonicalize"));
-
+        let err_str = result.unwrap_err().to_string();
+        assert!(err_str.contains("Failed to find project root") || err_str.contains("Failed to canonicalize"));
     }
 
     #[test]

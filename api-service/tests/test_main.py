@@ -83,3 +83,17 @@ async def test_predict_unexpected_exception(mock_stub):
     response = await client.post("/predict", json={"input_data": "test"})
     assert response.status_code == 500
     assert "Internal server error" in response.json()["detail"]
+
+
+def test_predict_malformed_request():
+    # Missing required field 'input_data'
+    response = client.post("/predict", json={})
+    assert response.status_code == 422
+    assert "input_data" in response.text
+
+
+def test_predict_env_var(monkeypatch):
+    # Patch the environment variable and reload the app
+    monkeypatch.setenv("MODEL_SERVICE_URL", "mockhost:12345")
+    # The app should pick up the env var (this is a basic check, deeper checks require more refactoring)
+    assert main.MODEL_SERVICE_URL == "mockhost:12345"

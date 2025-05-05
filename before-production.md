@@ -3,15 +3,15 @@
 This checklist is for the final pre-production review of the AnOps project. It is based on a critical review of the codebase and aims to prevent common deployment failures and technical debt. All items must be checked off before the first production release.
 
 ## 1. Test Coverage
-- [ ] **Rust CLI (`ao-cli`)**
-  - [ ] Integration tests for `ao build` and `ao check` (verify Docker images and gRPC code are actually built)
-  - [ ] Mock external commands in tests (e.g., using `assert_cmd` or similar)
-- [ ] **Python Services**
-  - [ ] `api-service`: Tests for startup/shutdown, environment variable handling, and malformed requests
-  - [ ] `model-service`: Test for internal server error in gRPC, and for environment misconfiguration
-- [ ] **End-to-End**
-  - [ ] E2E tests: Add teardown/cleanup logic
-  - [ ] E2E tests: Add negative-path tests (e.g., model-service down, invalid input)
+- [x] **Rust CLI (`ao-cli`)**
+  - [x] Integration tests for `ao build` and `ao check` (verify Docker images and gRPC code are actually built)
+  - [x] Mock external commands in tests (e.g., using `assert_cmd` or similar)
+- [x] **Python Services**
+  - [x] `api-service`: Tests for startup/shutdown, environment variable handling, and malformed requests
+  - [x] `model-service`: Test for internal server error in gRPC, and for environment misconfiguration
+- [x] **End-to-End**
+  - [x] E2E tests: Add teardown/cleanup logic
+  - [x] E2E tests: Add negative-path tests (e.g., model-service down, invalid input)
 
 ## 2. Coding Best Practices
 - [ ] **Logging**

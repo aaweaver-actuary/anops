@@ -2,6 +2,7 @@ import pytest
 import grpc
 import os
 from concurrent import futures
+from unittest import mock
 
 # Import the modules to be tested
 import server
@@ -26,6 +27,14 @@ def test_load_model_resource_env_var():
     os.environ["MODEL_PREFIX"] = test_prefix
     prefix = server.load_model_resource()
     assert prefix == test_prefix
+    del os.environ["MODEL_PREFIX"]  # Clean up
+
+
+def test_load_model_resource_empty_env():
+    """Test loading the prefix when environment variable is empty."""
+    os.environ["MODEL_PREFIX"] = ""
+    prefix = server.load_model_resource()
+    assert prefix == ""
     del os.environ["MODEL_PREFIX"]  # Clean up
 
 
@@ -84,6 +93,19 @@ def test_predict_invalid_argument(grpc_server):
 
         assert rpc_error.value.code() == grpc.StatusCode.INVALID_ARGUMENT
         assert "Invalid input: Input data cannot be empty." in rpc_error.value.details()
+
+
+def test_predict_internal_error(grpc_server):
+    """Test the Predict RPC call with internal server error."""
+    # Patch run_model to raise a generic Exception
+    with mock.patch("server.run_model", side_effect=Exception("Simulated failure")):
+        with grpc.insecure_channel(grpc_server) as channel:
+            stub = anops_pb2_grpc.AnOpsStub(channel)
+            request = anops_pb2.PredictRequest(input_data="test input")
+            with pytest.raises(grpc.RpcError) as rpc_error:
+                stub.Predict(request)
+            assert rpc_error.value.code() == grpc.StatusCode.INTERNAL
+            assert "Internal server error" in rpc_error.value.details()
 
 
 # TODO: Add test for internal server error (e.g., by mocking run_model to raise Exception)

@@ -1,5 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use tracing_subscriber::{fmt, EnvFilter};
+use std::fs::OpenOptions;
 
 use ao::{init, check, run, build}; // Added build
 
@@ -42,13 +44,25 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
+    // Initialize JSON logger to file
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("ao-cli.log")
+        .expect("Failed to open log file");
+    tracing_subscriber::fmt()
+        .with_writer(log_file)
+        .json()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Init { name } => init::run(name)?,
         Commands::Check { path } => check::run(path)?,
         Commands::Run { task_name, path } => run::run(task_name, path)?,
-        Commands::Build { path } => build::run(path)?, // Add handler for Build
+        Commands::Build { path } => build::run(path)?,
     }
 
     Ok(())

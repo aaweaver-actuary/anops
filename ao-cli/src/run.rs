@@ -3,6 +3,7 @@ use anyhow::{bail, Context, Result};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use tracing::{info, warn, error};
 
 use crate::utils::{find_project_root, run_tool}; // Import from utils
 
@@ -24,28 +25,24 @@ use crate::utils::{find_project_root, run_tool}; // Import from utils
 /// the task is not found, or any command within the task fails.
 pub fn run(task_name: String, path_str: String) -> Result<()> {
     let start_path = Path::new(&path_str);
-    println!(
-        "Running task '{}' starting from '{}'",
-        task_name,
-        start_path.display()
-    );
+    info!("Running task '{}' starting from '{}'", task_name, start_path.display());
 
     // Find project root using the utility function
     let project_path = find_project_root(start_path)
         .with_context(|| format!("Failed to find project root starting from '{}'", start_path.display()))?;
-    println!("Found project root at '{}'", project_path.display());
+    info!("Found project root at '{}'", project_path.display());
 
     // Load configuration
     let config = config::load_config(&project_path)
         .context("Failed to load project configuration")?;
-    println!("Project name from config: {}", config.project.name);
+    info!("Project name from config: {}", config.project.name);
 
     // Find the requested task
     match config.tasks.get(&task_name) {
         Some(commands) => {
-            println!("--- Running task '{}' ---", task_name);
+            info!("--- Running task '{}' ---", task_name);
             if commands.is_empty() {
-                println!("Task '{}' has no commands defined.", task_name);
+                warn!("Task '{}' has no commands defined.", task_name);
             } else {
                 for command_str in commands {
                     // Use the utility function to run the command
@@ -54,10 +51,11 @@ pub fn run(task_name: String, path_str: String) -> Result<()> {
                     })?;
                 }
             }
-            println!("--- Task '{}' finished successfully ---", task_name);
+            info!("--- Task '{}' finished successfully ---", task_name);
             Ok(())
         }
         None => {
+            error!("Task '{}' not found in ao.toml", task_name);
             bail!("Task '{}' not found in ao.toml", task_name);
         }
     }

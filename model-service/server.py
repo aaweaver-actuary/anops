@@ -3,16 +3,20 @@ from concurrent import futures
 import time
 import logging
 import os  # Added os
+from pythonjsonlogger import jsonlogger
+
+# Ensure log directory exists
+os.makedirs("/app/logs", exist_ok=True)
+log_file = "/app/logs/model-service.log"
+logHandler = logging.FileHandler(log_file)
+formatter = jsonlogger.JsonFormatter()
+logHandler.setFormatter(formatter)
+logging.basicConfig(level=logging.INFO, handlers=[logHandler], format=None)
+logger = logging.getLogger(__name__)
 
 # Import the generated classes
 import anops_pb2
 import anops_pb2_grpc
-
-# Configure basic logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
 
 
 # --- Simple Model Logic --- #

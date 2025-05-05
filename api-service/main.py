@@ -3,6 +3,21 @@ import grpc
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import logging
+from pythonjsonlogger import jsonlogger
+
+# Ensure log directory exists
+os.makedirs("/app/logs", exist_ok=True)
+log_file = "/app/logs/api-service.log"
+
+logHandler = logging.FileHandler(log_file)
+formatter = jsonlogger.JsonFormatter()
+logHandler.setFormatter(formatter)
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[logHandler],
+    format=None,  # Formatter is set above
+)
+logger = logging.getLogger(__name__)
 
 # Import the generated gRPC classes
 # Assumes the generated files (_pb2.py, _pb2_grpc.py) are accessible.
@@ -10,12 +25,6 @@ import logging
 # For simplicity, we'll assume they are in the same directory or PYTHONPATH.
 import anops_pb2
 import anops_pb2_grpc
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
 
 app = FastAPI()
 

@@ -1,24 +1,25 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::fs;
 use shlex;
+use tracing::{info, warn, error};
 
 /// Searches upwards from the starting path for a file named `ao.toml`.
 /// Returns the path to the directory containing `ao.toml` if found.
 pub fn find_project_root(start_path: &Path) -> Result<PathBuf> {
-    println!("find_project_root: Starting search from '{}'", start_path.display()); // Added log
+    info!("find_project_root: Starting search from '{}'", start_path.display());
     // Canonicalize the starting path to resolve symlinks and relative components
     let mut current_path = start_path
         .canonicalize()
         .with_context(|| format!("Failed to canonicalize path: {}", start_path.display()))?;
-    println!("find_project_root: Canonical path is '{}'", current_path.display()); // Added log
+    info!("find_project_root: Canonical path is '{}'", current_path.display());
 
     loop {
         let config_path = current_path.join("ao.toml");
-        println!("find_project_root: Checking for config at '{}'", config_path.display()); // Added log
+        info!("find_project_root: Checking for config at '{}'", config_path.display());
         if config_path.exists() && config_path.is_file() {
-            println!("find_project_root: Found config at '{}'", config_path.display()); // Added log
+            info!("find_project_root: Found config at '{}'", config_path.display());
             return Ok(current_path);
         }
 
@@ -26,14 +27,14 @@ pub fn find_project_root(start_path: &Path) -> Result<PathBuf> {
         if let Some(parent) = current_path.parent() {
             // Check if we are already at the root to prevent infinite loop
             if parent == current_path {
-                println!("find_project_root: Reached filesystem root, config not found."); // Added log
+                warn!("find_project_root: Reached filesystem root, config not found.");
                 break;
             }
-            println!("find_project_root: Moving up to parent '{}'", parent.display()); // Added log
+            info!("find_project_root: Moving up to parent '{}'", parent.display());
             current_path = parent.to_path_buf();
         } else {
             // Should not happen if parent == current_path check works, but as a safeguard
-            println!("find_project_root: No parent found, config not found."); // Added log
+            warn!("find_project_root: No parent found, config not found.");
             break;
         }
     }
@@ -73,10 +74,10 @@ pub fn run_tool(command_str: &str, project_root: &Path) -> Result<()> {
         .status()
         .with_context(|| format!("Failed to execute command: '{}'", command_str))?;
     if status.success() {
-        println!("Tool '{}' finished successfully.", command_str);
-        Ok(())
+        info!("Tool '{}' finished successfully.", command_str);
+        return Ok(());
     }
-    let cmd_name = parts[0];
+    let cmd_name = &parts[0];
     let args = &parts[1..];
 
     let mut command = Command::new(cmd_name);
@@ -90,17 +91,18 @@ pub fn run_tool(command_str: &str, project_root: &Path) -> Result<()> {
         .with_context(|| format!("Failed to execute command: '{}'", command_str))?;
 
     if status.success() {
-        println!("Tool '{}' finished successfully.", command_str);
-        Ok(())
+        info!("Tool '{}' finished successfully.", command_str);
+        return Ok(());
     } else {
+        error!("Tool '{}' failed with status: {}", command_str, status);
         bail!("Tool '{}' failed with status: {}", command_str, status);
     }
 }
 
 /// Generates gRPC code using python -m grpc_tools.protoc
 /// Assumes proto files are in model-interface and outputs to api-service and model-service.
-fn generate_grpc_code(project_root: &Path) -> Result<()> {
-    println!("--- Generating gRPC Code ---");
+pub fn generate_grpc_code(project_root: &Path) -> Result<()> {
+    info!("--- Generating gRPC Code ---");
     let interface_dir = project_root.join("model-interface");
     let api_service_dir = project_root.join("api-service");
     let model_service_dir = project_root.join("model-service");
@@ -139,17 +141,18 @@ fn generate_grpc_code(project_root: &Path) -> Result<()> {
     command.stdout(Stdio::inherit());
     command.stderr(Stdio::inherit());
 
-    println!("Executing: {:?}", command);
+    info!("Executing: {:?}", command);
 
     let status = command
         .status()
         .context("Failed to execute python -m grpc_tools.protoc command. Is grpcio-tools installed and python in PATH?")?;
 
     if status.success() {
-        println!("gRPC code generated successfully.");
-        println!("--- gRPC Code Generation Finished ---");
+        info!("gRPC code generated successfully.");
+        info!("--- gRPC Code Generation Finished ---");
         Ok(())
     } else {
+        error!("gRPC code generation failed with status: {}", status);
         bail!("gRPC code generation failed with status: {}", status);
     }
 }
@@ -193,10 +196,10 @@ mod tests {
         // If they ARE installed, it should return Ok.
         // We accept either Ok or an Err containing the execution failure message.
         match result {
-            Ok(_) => println!("generate_grpc_code returned Ok (python/grpcio-tools likely found)"),
+            Ok(_) => info!("generate_grpc_code returned Ok (python/grpcio-tools likely found)"),
             Err(e) => {
                 let msg = e.to_string();
-                println!("generate_grpc_code returned Err: {} (python/grpcio-tools likely not found or failed)", msg);
+                warn!("generate_grpc_code returned Err: {} (python/grpcio-tools likely not found or failed)", msg);
                 // Check it's the expected execution error, not a setup error
                 assert!(msg.contains("Failed to execute") || msg.contains("gRPC code generation failed"));
             }
@@ -220,4 +223,16 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Proto file not found"));
     }
+
+    #[test]
+    fn run_tool_succeeds_with_echo() {
+        use std::env;
+        use tempfile::tempdir;
+        let tmp_dir = tempdir().unwrap();
+        // Use a harmless command that works on all platforms
+        let result = run_tool("echo hello", tmp_dir.path());
+        assert!(result.is_ok());
+    }
+
+    // Note: For more robust mocking of external commands, consider using the 'assert_cmd' crate or similar in the future.
 }

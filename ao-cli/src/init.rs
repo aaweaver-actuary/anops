@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
+use tracing::{info, warn, error};
 
 // Basic placeholder content for generated files
 const DEFAULT_AO_TOML_CONTENT: &str = r#"[project]
@@ -184,12 +185,12 @@ See `anops.proto` and the root README for more details.
 pub fn run(name: String) -> Result<()> {
     let project_path = Path::new(&name);
 
-    println!("Initializing project '{}' at {:?}", name, project_path);
+    info!("Initializing project '{}' at {:?}", name, project_path);
 
     // Create base directory
     fs::create_dir_all(project_path)
         .with_context(|| format!("Failed to create project directory: {}", project_path.display()))?;
-    println!("Created directory: {:?}", project_path);
+    info!("Created directory: {:?}", project_path);
 
     // Create standard subdirectories
     let subdirs = ["api-service", "model-service", "model-interface", "tests", "notebooks"];
@@ -197,76 +198,76 @@ pub fn run(name: String) -> Result<()> {
         let dir_path = project_path.join(subdir);
         fs::create_dir_all(&dir_path)
             .with_context(|| format!("Failed to create subdirectory: {}", dir_path.display()))?;
-        println!("Created directory: {:?}", dir_path);
+        info!("Created directory: {:?}", dir_path);
     }
 
     // Create ao.toml configuration file
     let config_path = project_path.join("ao.toml");
-    let config_content = DEFAULT_AO_TOML_CONTENT.replace("{}", &name); // Basic placeholder, replace name
+    let config_content = DEFAULT_AO_TOML_CONTENT.replace("{}", &name);
     fs::write(&config_path, config_content)
         .with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
-    println!("Created config file: {:?}", config_path);
+    info!("Created config file: {:?}", config_path);
 
     // Create .gitignore
     let gitignore_path = project_path.join(".gitignore");
     fs::write(&gitignore_path, DEFAULT_GITIGNORE_CONTENT)
         .with_context(|| format!("Failed to write .gitignore file: {}", gitignore_path.display()))?;
-    println!("Created file: {:?}", gitignore_path);
+    info!("Created file: {:?}", gitignore_path);
 
     // Create Dockerfiles
     let api_dockerfile_path = project_path.join("api-service/Dockerfile");
     fs::write(&api_dockerfile_path, DEFAULT_API_DOCKERFILE)
         .with_context(|| format!("Failed to write api-service Dockerfile: {}", api_dockerfile_path.display()))?;
-    println!("Created file: {:?}", api_dockerfile_path);
+    info!("Created file: {:?}", api_dockerfile_path);
 
     let model_dockerfile_path = project_path.join("model-service/Dockerfile");
     fs::write(&model_dockerfile_path, DEFAULT_MODEL_DOCKERFILE)
         .with_context(|| format!("Failed to write model-service Dockerfile: {}", model_dockerfile_path.display()))?;
-    println!("Created file: {:?}", model_dockerfile_path);
+    info!("Created file: {:?}", model_dockerfile_path);
 
     // Create docker-compose.yml
     let compose_path = project_path.join("docker-compose.yml");
     fs::write(&compose_path, DEFAULT_DOCKER_COMPOSE)
         .with_context(|| format!("Failed to write docker-compose.yml: {}", compose_path.display()))?;
-    println!("Created file: {:?}", compose_path);
+    info!("Created file: {:?}", compose_path);
 
     // Create model-interface proto file
     let proto_path = project_path.join("model-interface/anops.proto");
     fs::write(&proto_path, DEFAULT_ANOP_PROTO)
         .with_context(|| format!("Failed to write anops.proto: {}", proto_path.display()))?;
-    println!("Created file: {:?}", proto_path);
+    info!("Created file: {:?}", proto_path);
 
     // Create READMEs
     let api_readme_path = project_path.join("api-service/README.md");
      fs::write(&api_readme_path, DEFAULT_API_README)
         .with_context(|| format!("Failed to write api-service README: {}", api_readme_path.display()))?;
-    println!("Created file: {:?}", api_readme_path);
+    info!("Created file: {:?}", api_readme_path);
 
     let model_readme_path = project_path.join("model-service/README.md");
      fs::write(&model_readme_path, DEFAULT_MODEL_README)
         .with_context(|| format!("Failed to write model-service README: {}", model_readme_path.display()))?;
-    println!("Created file: {:?}", model_readme_path);
+    info!("Created file: {:?}", model_readme_path);
 
     let interface_readme_path = project_path.join("model-interface/README.md");
      fs::write(&interface_readme_path, DEFAULT_INTERFACE_README)
         .with_context(|| format!("Failed to write model-interface README: {}", interface_readme_path.display()))?;
-    println!("Created file: {:?}", interface_readme_path);
+    info!("Created file: {:?}", interface_readme_path);
 
     // Create placeholder files in services (optional, but good practice)
     // e.g., api-service/main.py, model-service/server.py
     // fs::write(project_path.join("api-service/main.py"), "# FastAPI app placeholder")?;
     // fs::write(project_path.join("model-service/server.py"), "# gRPC server placeholder")?;
 
-    println!("Project '{}' initialized successfully.", name);
-    println!("Next steps:");
-    println!("  - cd {}", name);
-    println!("  - Review READMEs in api-service, model-service, model-interface.");
-    println!("  - Implement your model in model-service.");
-    println!("  - Implement the API endpoints in api-service.");
-    println!("  - Generate gRPC code (see model-interface/README.md).");
-    println!("  - Configure dependencies (e.g., requirements.txt).");
-    println!("  - Run 'ao build' to build the service images.");
-    println!("  - Run 'docker-compose up' to start the services.");
+    info!("Project '{}' initialized successfully.", name);
+    info!("Next steps for '{}':", name);
+    info!("  - cd {}", name);
+    info!("  - Review READMEs in api-service, model-service, model-interface.");
+    info!("  - Implement your model in model-service.");
+    info!("  - Implement the API endpoints in api-service.");
+    info!("  - Generate gRPC code (see model-interface/README.md).");
+    info!("  - Configure dependencies (e.g., requirements.txt).");
+    info!("  - Run 'ao build' to build the service images.");
+    info!("  - Run 'docker-compose up' to start the services.");
 
     Ok(())
 }
@@ -321,8 +322,7 @@ mod tests {
         // Check if config file has basic content
         let config_path = project_path.join("ao.toml");
         let content = fs::read_to_string(config_path).unwrap();
-        assert!(content.contains(&format!("[project]
-name = "{}"", project_name)));
+        assert!(content.contains(&format!("[project]\nname = \"{}\"", project_name)));
 
         // Check .gitignore content (basic check)
         let gitignore_path = project_path.join(".gitignore");
